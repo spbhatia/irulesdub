@@ -1,0 +1,62 @@
+import requests
+from requests.auth import HTTPBasicAuth
+
+# Disable SSL warnings
+requests.packages.urllib3.disable_warnings()
+
+# Authentication and headers setup
+device_ip = "your_device_ip"
+username = "your_username"
+password = "your_password"
+auth = HTTPBasicAuth(username, password)
+headers = {"Content-Type": "application/json"}
+
+# Function to fetch details from the F5 REST API
+def fetch_details(url):
+    response = requests.get(url, auth=auth, headers=headers, verify=False)
+    if response.status_code == 200:
+        return response.json()["items"]
+    else:
+        response.raise_for_status()
+
+# Function to print details in a readable format
+def print_details(policies):
+    for policy in policies:
+        print(f"Policy Name: {policy['name']}")
+        rules = fetch_details(policy['rulesReference']['link'])
+        for rule in rules:
+            print(f"  Rule Name: {rule['name']}")
+            conditions = fetch_details(rule['conditionsReference']['link'])
+            actions = fetch_details(rule['actionsReference']['link'])
+            print(f"    Conditions: {conditions}")
+            print(f"    Actions: {actions}")
+
+# Function to find duplicate rules
+def find_duplicates(policies):
+    duplicate_report = {}
+    for policy in policies:
+        rules = fetch_details(policy['rulesReference']['link'])
+        seen_rules = {}
+        for rule in rules:
+            conditions = tuple(sorted([cond['name'] for cond in fetch_details(rule['conditionsReference']['link'])]))
+            actions = tuple(sorted([act['name'] for act in fetch_details(rule['actionsReference']['link'])]))
+            rule_signature = (conditions, actions)
+            if rule_signature in seen_rules:
+                duplicate_report.setdefault(policy['name'], []).append((rule['name'], seen_rules[rule_signature]))
+            else:
+                seen_rules[rule_signature] = rule['name']
+    return duplicate_report
+
+# Function to print the duplicate report
+def print_duplicate_report(duplicate_report):
+    for policy_name, duplicates in duplicate_report.items():
+        print(f"Policy: {policy_name}")
+        for dup in duplicates:
+            print(f"  Duplicate Rule: {dup[0]} is a duplicate of {dup[1]}")
+
+# Main execution flow
+base_url = f"https://{device_ip}/mgmt/tm/ltm/policy"
+policies = fetch_details(base_url)
+print_details(policies)
+duplicate_report = find_duplicates(policies)
+print_duplicate_report(duplicate_report)
