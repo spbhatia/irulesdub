@@ -1,0 +1,65 @@
+import requests
+from requests.auth import HTTPBasicAuth
+
+# Function to safely make a request to the F5 API
+def safe_request(url, auth, headers):
+    response = requests.get(url, auth=auth, headers=headers, verify=False)
+    response.raise_for_status()
+    return response.json()
+
+# Function to fetch and process policies
+def fetch_policies(f5hostname, auth, headers):
+    url = f"https://{f5hostname}/mgmt/tm/ltm/policy"
+    policies = safe_request(url, auth, headers).get('items', [])
+    all_rules = {}
+
+    for policy in policies:
+        if policy.get('status', '').lower() == 'published':
+            print(f"\nPublished Policy name: {policy['name']}")
+            rules = fetch_rules(policy, f5hostname, auth, headers)
+            all_rules[policy['name']] = rules
+
+    return all_rules
+
+# Function to fetch rules for a given policy
+def fetch_rules(policy, f5hostname, auth, headers):
+    rule_link = policy['rulesReference']['link'].split('localhost/')[1]
+    rule_url = f"https://{f5hostname}/{rule_link}"
+    rules = safe_request(rule_url, auth, headers).get('items', [])
+    rules_details = {}
+
+    for rule in rules:
+        actions = fetch_actions_or_conditions(rule['actionsReference']['link'], f5hostname, auth, headers)
+        conditions = fetch_actions_or_conditions(rule['conditionsReference']['link'], f5hostname, auth, headers)
+        rules_details[rule['name']] = {'actions': actions, 'conditions': conditions}
+    
+    return rules_details
+
+# Function to fetch actions or conditions
+def fetch_actions_or_conditions(reference_link, f5hostname, auth, headers):
+    link = reference_link.split('localhost/')[1]
+    url = f"https://{f5hostname}/{link}"
+    return safe_request(url, auth, headers).get('items', [])
+
+# Function to compare rules and identify duplicates
+def compare_rules(all_rules):
+    for policy_name, rules in all_rules.items():
+        seen = {}
+        print(f"\nChecking duplicates in Policy: {policy_name}")
+        for rule_name, details in rules.items():
+            key = (tuple(details['conditions']), tuple(details['actions']))
+            if key in seen:
+                print(f"Duplicate Rule Found: {rule_name} is similar to {seen[key]}")
+            else:
+                seen[key] = rule_name
+
+# Main execution logic
+if __name__ == "__main__":
+    f5hostname = "your_f5_hostname"
+    username = "your_username"
+    password = "your_password"
+    auth = HTTPBasicAuth(username, password)
+    headers = {"Content-Type": "application/json"}
+
+    all_rules = fetch_policies(f5hostname, auth, headers)
+    compare_rules(all_rules)
