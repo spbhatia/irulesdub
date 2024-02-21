@@ -1,0 +1,56 @@
+def safe_request(url, headers, token):
+    # Implement your safe_request function here
+    pass
+
+def compare_policy(policies_data):
+    for policy_name, rules in policies_data.items():
+        for rule_name, rule_data in rules.items():
+            actions = rule_data['actions']
+            conditions = rule_data['conditions']
+
+            if len(actions) != len(set(map(str, actions))):
+                print(f"Duplicate actions found in policy {policy_name}, rule {rule_name}")
+
+            if len(conditions) != len(set(map(str, conditions))):
+                print(f"Duplicate conditions found in policy {policy_name}, rule {rule_name}")
+
+def fetch_policy(f5hostname, headers, token):
+    policies_data = {}
+
+    url = f"https://{f5hostname}/mgmt/tm/ltm/policy"
+    response = safe_request(url, headers, token)
+    policies = response.get('items', [])
+
+    for policy in policies:
+        if policy.get('status', '').lower() == 'published':
+            policy_name = policy['name']
+            policies_data[policy_name] = {}
+
+            rule_link = policy['rulesReference']['link'].split('localhost/')[1]
+            rule_url = f"https://{f5hostname}/{rule_link}"
+            rules_response = safe_request(rule_url, headers, token)
+            rules = rules_response.get('items', [])
+
+            for rule in rules:
+                rule_name = rule['name']
+                policies_data[policy_name][rule_name] = {'actions': [], 'conditions': []}
+
+                action_link = rule['actionsReference']['link'].split('localhost/')[1]
+                condition_link = rule['conditionsReference']['link'].split('localhost/')[1]
+
+                action_url = f"https://{f5hostname}/{action_link}"
+                action_response = safe_request(action_url, headers, token)
+                actions = action_response.get('items', [])
+                filtered_actions = [{k: v for k, v in action.items() if k not in ['kind', 'name', 'poolReference', 'selfLink', 'fullPath', 'generation', 'code', 'expirySecs', 'length', 'offset']} for action in actions]
+
+                condition_url = f"https://{f5hostname}/{condition_link}"
+                condition_response = safe_request(condition_url, headers, token)
+                conditions = condition_response.get('items', [])
+                filtered_conditions = [{k: v for k, v in condition.items() if k not in ['kind', 'name', 'fullPath', 'generation', 'selfLink', 'caseInsensitive']} for condition in conditions]
+
+                policies_data[policy_name][rule_name]['actions'] = filtered_actions
+                policies_data[policy_name][rule_name]['conditions'] = filtered_conditions
+
+    compare_policy(policies_data)
+
+    return None, None, None
