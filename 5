@@ -1,0 +1,12 @@
+def compare_policy(policies_data):
+    for policy_name, rules in policies_data.items():
+        for rule_name, rule_data in rules.items():
+            # Serialize the actions and conditions to JSON with sorted keys
+            actions = [''.join(sorted(json.dumps(action, sort_keys=True))) for action in rule_data['actions']]
+            conditions = [''.join(sorted(json.dumps(condition, sort_keys=True))) for condition in rule_data['conditions']]
+
+            # Check for duplicates
+            if len(actions) != len(set(actions)):
+                print(f"Duplicate actions found in policy {policy_name}, rule {rule_name}")
+            if len(conditions) != len(set(conditions)):
+                print(f"Duplicate conditions found in policy {policy_name}, rule {rule_name}")
