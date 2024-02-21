@@ -1,0 +1,21 @@
+import json
+
+def compare_policy(policies_data):
+    for policy_name, rules in policies_data.items():
+        for rule_name, rule_data in rules.items():
+            actions = rule_data['actions']
+            conditions = rule_data['conditions']
+            
+            # Create a list of sorted action strings for comparison
+            actions_sorted = [''.join(sorted(json.dumps(action, sort_keys=True))) for action in actions]
+            conditions_sorted = [''.join(sorted(json.dumps(condition, sort_keys=True))) for condition in conditions]
+            
+            # Check for duplicates
+            if len(actions_sorted) != len(set(actions_sorted)):
+                print(f"Duplicate actions found in policy {policy_name}, rule {rule_name}")
+            if len(conditions_sorted) != len(set(conditions_sorted)):
+                print(f"Duplicate conditions found in policy {policy_name}, rule {rule_name}")
+
+# ... rest of your fetch_policy and main functions ...
+
+# Make sure to call compare_policy(policies_data) after the policies_data is filled
