@@ -1,0 +1,20 @@
+import json
+
+def get_combination_signature(actions, conditions):
+    # Serialize actions and conditions into a string
+    return json.dumps({
+        'actions': sorted(actions, key=lambda x: json.dumps(x, sort_keys=True)),
+        'conditions': sorted(conditions, key=lambda x: json.dumps(x, sort_keys=True))
+    }, sort_keys=True)
+
+def compare_policy(policies_data):
+    for policy_name, rules in policies_data.items():
+        seen_combinations = set()
+        for rule_name, rule_data in rules.items():
+            signature = get_combination_signature(rule_data['actions'], rule_data['conditions'])
+            if signature in seen_combinations:
+                print(f"Duplicate rule combination found in policy: {policy_name}, rule: {rule_name}")
+            else:
+                seen_combinations.add(signature)
+
+# ... your existing code to fetch policies_data and call compare_policy ...
