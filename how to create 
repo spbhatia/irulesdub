@@ -1,0 +1,108 @@
+Hello Sanket! I'm glad to help you with setting up a new GitHub repository for your Python script. Here's a step-by-step guide to get you started:
+
+1. **Create a GitHub Account**: If you haven’t already, sign up for a GitHub account at [github.com](https://github.com).
+
+2. **Create a New Repository**:
+    - On GitHub, navigate to the main page of your account.
+    - Click the "+" icon in the top right corner and select "New repository."
+    - Name your repository and provide a brief description.
+    - Choose to make the repository either public or private.
+    - Optionally, initialize the repository with a README, .gitignore, and license.
+
+3. **Set Up Git on Your Local Machine**:
+    - If Git is not installed on your computer, download and install it from [git-scm.com](https://git-scm.com).
+    - Configure Git with your GitHub username and email:
+      ```bash
+      git config --global user.name "your_username"
+      git config --global user.email "your_email@example.com"
+      ```
+
+4. **Add Your Python Script to the Repository**:
+    - Create a folder on your computer where you want to store your project.
+    - Move your Python script into this folder.
+    - Open a terminal or command prompt and navigate to your project folder.
+    - Initialize the local directory as a Git repository:
+      ```bash
+      git init
+      ```
+    - Add the files in your new local repository. This stages them for the first commit.
+      ```bash
+      git add .
+      ```
+    - Commit the files that you've staged in your local repository.
+      ```bash
+      git commit -m "First commit"
+      ```
+
+5. **Connect Your Local Repository to GitHub**:
+    - Go back to GitHub and copy the remote repository URL.
+    - In your local directory, add the URL for the remote repository where your local repository will be pushed.
+      ```bash
+      git remote add origin <remote repository URL>
+      ```
+    - Verify the new remote URL:
+      ```bash
+      git remote -v
+      ```
+
+6. **Push Your Code to GitHub**:
+    - Push the changes in your local repository to GitHub.
+      ```bash
+      git push -u origin master
+      ```
+
+7. **Regularly Update Your Repository**:
+    - As you make changes to your script, regularly push updates to GitHub.
+    - Use `git add`, `git commit`, and `git push` commands to update your repository.
+
+Remember, GitHub is not just a platform to store your code, but also a great tool for collaboration. You can use features like issues, pull requests, and actions to enhance your project.
+
+Feel free to ask any questions or if you need further clarification on any of the steps!
+
+Certainly, Sanket. Let's restart the process, incorporating the authentication step with your GitHub Enterprise account. Here's the step-by-step guide tailored for your situation:
+
+1. **Ensure Git is Configured with Your Enterprise Account**:
+    - Set up Git with your GitHub Enterprise username and email, if not already done:
+      ```bash
+      git config --global user.name "your_username"
+      git config --global user.email "your_email@yourdomain.com"
+      ```
+
+2. **Create a New Repository on GitHub Enterprise**:
+    - Log in to your GitHub Enterprise account.
+    - Navigate to your dashboard and start a new repository.
+    - Avoid initializing the repository with any files like a README, as this can cause issues when pushing from your local repository.
+
+3. **Clone the New Repository Locally**:
+    - Once the repository is created, copy its URL.
+    - Clone the repository to your local machine:
+      ```bash
+      git clone <repository_URL>
+      ```
+
+4. **Add Your Python Script to the Cloned Repository**:
+    - Copy your Python script into the cloned repository's directory.
+    - Stage and commit the new file:
+      ```bash
+      git add your_script.py
+      git commit -m "Add Python script"
+      ```
+
+5. **Push Your Changes to the Remote Repository**:
+    - Push the changes to your GitHub Enterprise repository:
+      ```bash
+      git push origin main
+      ```
+    - If prompted for authentication, use your GitHub Enterprise username and the password or a personal access token if you have two-factor authentication enabled.
+
+6. **Set Up Credential Caching (Optional)**:
+    - To avoid entering your username and password every time, you can use Git credential caching:
+      ```bash
+      git config --global credential.helper cache
+      ```
+    - You can also set the cache to timeout after a certain number of seconds (e.g., 1 hour = 3600 seconds):
+      ```bash
+      git config --global credential.helper 'cache --timeout=3600'
+      ```
+
+By following these steps, you should be able to push your Python script to your new GitHub Enterprise repository without the errors you were encountering earlier. If you run into any more issues, let me know, and I'll be happy to assist you further.
