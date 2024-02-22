@@ -1,0 +1,40 @@
+import requests
+
+def compare_policy(policies_data):
+  """
+  Compares actions and conditions within each policy for duplicates.
+
+  Args:
+    policies_data: A nested dictionary representing policies and their rules.
+  """
+  for policy_name, rules in policies_data.items():
+    for rule_name, rule_data in rules.items():
+      # Compare actions using set operations for efficiency
+      unique_actions = set()
+      duplicates = []
+      for action in rule_data['actions']:
+        if action in unique_actions:
+          duplicates.append(action)
+        else:
+          unique_actions.add(action)
+
+      # Compare conditions using deepdiff for complex object comparison
+      from deepdiff import DeepDiff
+      unique_conditions = set()
+      condition_duplicates = DeepDiff(rule_data['conditions'], unique_conditions, ignore_order=True)
+      # Extract changed items (duplicates) from DeepDiff output
+      condition_duplicates = [item for item in condition_duplicates.values() if item and item.get('type') == 'change']
+
+      if duplicates:
+        print(f"Duplicate actions found in policy: {policy_name}, rule: {rule_name}")
+        print(f"Duplicates: {duplicates}")
+      if condition_duplicates:
+        print(f"Duplicate conditions found in policy: {policy_name}, rule: {rule_name}")
+        print(f"Duplicates:")
+        for item in condition_duplicates:
+          print(f"- {item.get('path')}: {item.get('old_value')} -> {item.get('new_value')}")
+
+# ... your code for fetching policies using safe_request
+
+# Example usage
+compare_policy(fetched_policies_data)
