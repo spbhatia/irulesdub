@@ -1,0 +1,29 @@
+when HTTP_REQUEST {
+    if { [HTTP::header exists HSBC-CLIENT-IP] } {
+        HTTP::header remove HSBC-CLIENT-IP
+    }
+
+    if { [HTTP::header exists x-dxp-kona-auth] } {
+        switch -glob [HTTP::header value x-dxp-kona-auth] {
+            "Xue6a4nP) jh0OX!NedQ3gLYQim(R#LM&SSZISKMQ(wpn&Y$pnkAxi7))VL2kMjnV" {
+                HTTP::header insert HSBC-CLIENT-IP [HTTP::header value HSBC-AWS-Client-IP]
+            }
+            default {
+                HTTP::respond 403
+                return
+            }
+        }
+    } elseif { [HTTP::header exists X-Forwarded-For] } {
+        HTTP::header remove X-Forwarded-For
+        HTTP::header insert X-Forwarded-For [IP::client_addr]
+    } else {
+        HTTP::header insert X-Forwarded-For [IP::client_addr]
+        HTTP::header insert HSBC-CLIENT-IP [IP::client_addr]
+        if { [HTTP::header exists x-dxp-kona-auth] } {
+            HTTP::header remove x-dxp-kona-auth
+        }
+        if { [HTTP::header exists HSBC-AWS-Client-IP] } {
+            HTTP::header remove HSBC-AWS-Client-IP
+        }
+    }
+}
