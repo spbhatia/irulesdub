@@ -1,0 +1,20 @@
+import pandas as pd
+
+# Assuming you have your data in dictionaries or in a format that can be converted to pandas DataFrame
+virtual_server_profiles_data = {
+    'Virtual Server Name': ['Server1', 'Server2'],
+    'Client-side Profile Name': ['Profile1', 'Profile2']
+}
+
+unused_client_ssl_profiles_data = {
+    'Unused Client-SSL Profile Name': ['UnusedProfile1', 'UnusedProfile2']
+}
+
+# Convert dictionaries to pandas DataFrames
+df_virtual_server_profiles = pd.DataFrame(virtual_server_profiles_data)
+df_unused_client_ssl_profiles = pd.DataFrame(unused_client_ssl_profiles_data)
+
+# Create a Pandas Excel writer using openpyxl as the engine
+with pd.ExcelWriter('virtual_and_ssl_profiles.xlsx', engine='openpyxl') as writer:
+    df_virtual_server_profiles.to_excel(writer, sheet_name='Virtual Server Profiles', index=False)
+    df_unused_client_ssl_profiles.to_excel(writer, sheet_name='Unused Client-SSL Profiles', index=False)
