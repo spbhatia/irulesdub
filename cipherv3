@@ -1,0 +1,47 @@
+import pandas as pd
+import requests  # Assuming you're using the requests library for HTTP requests
+
+def safe_request(url, headers, token):
+    # Placeholder for your actual request logic
+    # Remember to replace this with your actual request code
+    response = requests.get(url, headers=headers, auth=('user', token))
+    return response.json()
+
+def fetch_cipher(f5hostname, headers, token):
+    url = f"https://{f5hostname}/mgmt/tm/ltm/virtual"
+    response = safe_request(url, headers, token)
+
+    virtual_servers = response.get('items', [])
+    used_profiles = set()
+    virtual_server_profiles_data = []
+    unused_client_ssl_profiles_data = []
+
+    for virtual_server in virtual_servers:
+        virtual_name = virtual_server.get('name', 'No Name Found')
+        virtualprofile_url = f"https://{f5hostname}/mgmt/tm/ltm/virtual/{virtual_name}/profiles"
+        virtualprofile_response = safe_request(virtualprofile_url, headers, token)
+
+        if virtualprofile_response:
+            items = virtualprofile_response.get('items', [])
+            for item in items:
+                profile_context = item.get('context', "")
+                if profile_context == "clientside":
+                    profile_name = item.get('name', 'No Name Found')
+                    used_profiles.add(profile_name)
+
+    # Assuming the logic to populate 'virtual_server_profiles_data' and 'unused_client_ssl_profiles_data' goes here
+
+    # Export to Excel
+    df_virtual_server_profiles = pd.DataFrame(virtual_server_profiles_data)
+    df_unused_client_ssl_profiles = pd.DataFrame(unused_client_ssl_profiles_data)
+
+    with pd.ExcelWriter('virtual_and_ssl_profiles.xlsx', engine='openpyxl') as writer:
+        df_virtual_server_profiles.to_excel(writer, sheet_name='Virtual Server Profiles', index=False)
+        df_unused_client_ssl_profiles.to_excel(writer, sheet_name='Unused Client-SSL Profiles', index=False)
+
+# Example usage
+f5hostname = 'your_f5_host'
+headers = {'Content-Type': 'application/json'}
+token = 'your_auth_token'
+
+fetch_cipher(f5hostname, headers, token)
