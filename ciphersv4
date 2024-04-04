@@ -1,0 +1,46 @@
+import pandas as pd
+
+def safe_request(url, headers, token):
+    # Assuming implementation is correct and returns a JSON response
+    pass
+
+def fetch_cipher(f5hostname, headers, token):
+    url = f"https://{f5hostname}/mgmt/tm/ltm/virtual"
+    response = safe_request(url, headers, token)
+
+    virtual_servers = response.get('items', [])
+    used_profiles = set()
+    virtual_server_profiles_data = []
+
+    for virtual_server in virtual_servers:
+        virtual_name = virtual_server.get('name', 'No Name Found')
+        virtualprofile_url = f"https://{f5hostname}/mgmt/tm/ltm/virtual/{virtual_name}/profiles"
+        virtualprofile_response = safe_request(virtualprofile_url, headers, token)
+
+        if virtualprofile_response:
+            items = virtualprofile_response.get('items', [])
+            for item in items:
+                profile_context = item.get('context', "")
+                if profile_context == "clientside":
+                    profile_name = item.get('name', 'No Name Found')
+                    used_profiles.add(profile_name)
+                    # Assuming you want to collect some specific data for the Excel sheet
+                    virtual_server_profiles_data.append([virtual_name, profile_name])
+
+    # For unused profiles, assuming a placeholder logic to fetch and filter them
+    # This placeholder needs to be replaced with actual logic
+    unused_profiles = [...]  # Placeholder for logic to determine unused profiles
+
+    # Export to Excel
+    df_virtual_server_profiles = pd.DataFrame(virtual_server_profiles_data, columns=['Virtual Server Name', 'Profile Name'])
+    df_unused_client_ssl_profiles = pd.DataFrame(unused_profiles, columns=['Unused Client-SSL Profile Name'])
+
+    with pd.ExcelWriter('virtual_and_ssl_profiles.xlsx', engine='openpyxl') as writer:
+        df_virtual_server_profiles.to_excel(writer, sheet_name='Virtual Server Profiles', index=False)
+        df_unused_client_ssl_profiles.to_excel(writer, sheet_name='Unused Client-SSL Profiles', index=False)
+
+# Placeholder for actual f5hostname, headers, and token
+f5hostname = 'example.com'
+headers = {'Authorization': 'Bearer YourTokenHere'}
+token = 'YourTokenHere'
+fetch_cipher(f5hostname, headers, token)
