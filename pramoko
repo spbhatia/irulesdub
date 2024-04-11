@@ -1,0 +1,35 @@
+import paramiko
+
+# SSH connection parameters
+hostname = 'your_remote_host'
+port = 22  # default SSH port
+username = 'your_username'
+password = 'your_password'
+
+# Command to execute
+command = "list itm virtual | grep -B 1 clientside | grep -v clientside"
+
+try:
+    # Create SSH client
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    
+    # Establish SSH connection
+    ssh.connect(hostname, port, username, password)
+    
+    # Execute the command
+    stdin, stdout, stderr = ssh.exec_command(command)
+    
+    # Read command output
+    lines = stdout.read().decode().splitlines()
+    
+    # Process and print profile names
+    for line in lines:
+        if line.endswith(" {"):
+            print(line.rstrip(' {'))
+
+except Exception as e:
+    print(f"An error occurred: {e}")
+finally:
+    if 'ssh' in locals():
+        ssh.close()
