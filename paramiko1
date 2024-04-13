@@ -1,0 +1,38 @@
+import paramiko
+
+def connect_to_f5(host, port, username, key_file):
+    client = paramiko.SSHClient()
+    client.load_system_host_keys()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    key = paramiko.RSAKey.from_private_key_file(key_file)
+    client.connect(hostname=host, port=port, username=username, pkey=key)
+    return client
+
+def execute_command(client, command):
+    stdin, stdout, stderr = client.exec_command(command)
+    output = stdout.read()
+    errors = stderr.read()
+    return output, errors
+
+def main():
+    host = 'your_f5_host_address'
+    port = 22  # Default SSH Port
+    username = 'your_username'
+    key_file = 'path_to_your_converted_private_key'  # Use the OpenSSH format key
+    
+    command = 'show sys version'
+
+    try:
+        client = connect_to_f5(host, port, username, key_file)
+        output, errors = execute_command(client, command)
+        print("Output:")
+        print(output.decode())
+        if errors:
+            print("Errors:")
+            print(errors.decode())
+    finally:
+        if client:
+            client.close()
+
+if __name__ == '__main__':
+    main()
