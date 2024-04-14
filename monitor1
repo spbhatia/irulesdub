@@ -1,0 +1,35 @@
+import requests
+
+def safe_request(url, headers, token):
+    """A function to safely make API requests with error handling."""
+    try:
+        headers['Authorization'] = f'Bearer {token}'
+        response = requests.get(url, headers=headers, verify=False)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed: {e}")
+        return None
+
+# Set up the API endpoint and headers
+f5hostname = '<your-f5-host>'
+sslprofile_monitor_url = f"https://{f5hostname}/mgmt/tm/ltm/monitor/https?$select=name,sslProfile"
+headers = {
+    'Content-Type': 'application/json'
+}
+token = 'your_access_token'
+
+# Fetch the monitors
+sslprofile_monitor_response = safe_request(sslprofile_monitor_url, headers, token)
+
+# Initialize a list to store names of monitors with SSL profiles
+monitors_with_sslprofiles = []
+
+if sslprofile_monitor_response:
+    sslprofile_monitor_items = sslprofile_monitor_response.get('items', [])
+    for item in sslprofile_monitor_items:
+        sslprofile_monitor = item.get('sslProfile', "")
+        if sslprofile_monitor:  # Check if sslProfile is not empty
+            monitors_with_sslprofiles.append(item.get('name', 'No Name Found'))
+
+print("Monitors with SSL Profiles:", monitors_with_sslprofiles)
