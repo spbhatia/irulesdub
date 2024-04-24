@@ -1,0 +1,71 @@
+import requests
+import pandas as pd
+
+def safe_request(url, headers, token):
+    headers['X-F5-Auth-Token'] = token
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Raises an HTTPError for bad responses
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Request failed: {e}")
+        return {}
+
+def fetch_virtual_servers(f5hostname, headers, token, limit=50):
+    offset = 0
+    all_virtual_servers = []
+
+    while True:
+        virtual_url = f"https://{f5hostname}/mgmt/tm/ltm/virtual?$select=name&$top={limit}&$skip={offset}"
+        response = safe_request(virtual_url, headers, token)
+        virtual_servers = response.get('items', [])
+        if not virtual_servers:
+            break
+        all_virtual_servers.extend(virtual_servers)
+        offset += limit
+    
+    return all_virtual_servers
+
+def analyze_profiles(f5hostname, headers, token, virtual_servers):
+    clientssl_used_profiles = set()
+    serverside_used_profiles = set()
+    profile_data = []
+
+    for virtual_server in virtual_servers:
+        virtual_name = virtual_server.get('name', 'No Name Found')
+        profile_url = f"https://{f5hostname}/mgmt/tm/ltm/virtual/{virtual_name}/profiles?$select=name,context"
+        profile_response = safe_request(profile_url, headers, token)
+        
+        for profile in profile_response.get('items', []):
+            profile_name = profile.get('name', 'No Name Found')
+            profile_context = profile.get('context', "")
+            profile_detail_url = f"https://{f5hostname}/mgmt/tm/ltm/profile/{'client-ssl' if profile_context == 'clientside' else 'server-ssl'}/{profile_name}?$select=ciphers,tmOptions"
+            detail_response = safe_request(profile_detail_url, headers, token)
+            
+            profile_data.append({
+                "Virtual Server Name": virtual_name,
+                "Profile Name": profile_name,
+                "Profile Context": profile_context,
+                "Ciphers": detail_response.get('ciphers'),
+                "Options": detail_response.get('tmOptions')
+            })
+            
+            if profile_context == 'clientside':
+                clientssl_used_profiles.add(profile_name)
+            else:
+                serverside_used_profiles.add(profile_name)
+
+    return profile_data, clientssl_used_profiles, serverside_used_profiles
+
+def main(f5hostname, headers, token):
+    virtual_servers = fetch_virtual_servers(f5hostname, headers, token)
+    profiles_data, clientssl, serverssl = analyze_profiles(f5hostname, headers, token, virtual_servers)
+    
+    # Export data to Excel
+    pd.DataFrame(profiles_data).to_excel(f"{f5hostname}_ssl_profiles.xlsx", index=False)
+
+if __name__ == "__main__":
+    f5hostname = 'example.f5.com'
+    headers = {'Content-Type': 'application/json'}
+    token = 'your_auth_token'
+    main(f5hostname, headers, token)
