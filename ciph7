@@ -1,0 +1,64 @@
+def read_config(file_path):
+    start_parsing = False
+    in_virtual_server = False
+    in_profiles_block = False
+    virtual_server_name = None
+    results = []
+
+    with open(file_path, 'r') as file:
+        for line in file:
+            line = line.strip()
+            
+            # Check for the start of the relevant configuration
+            if '############ MultiConfigPart Running configuration (Not deployable)' in line:
+                start_parsing = True
+                continue
+
+            # Once within the relevant configuration section
+            if start_parsing:
+                if line.startswith('ltm virtual') and not '/common' in line:
+                    # Save any existing virtual server info
+                    if virtual_server_name:
+                        results.append({
+                            'virtual_server': virtual_server_name,
+                            'client_side_profiles': in_profiles_block
+                        })
+                    virtual_server_name = line.split(' ')[2]
+                    in_virtual_server = True
+                    in_profiles_block = False  # Reset profile block status
+
+                elif in_virtual_server and 'profiles {' in line:
+                    in_profiles_block = True
+                    client_side_profiles = []  # Reset client-side profiles list
+
+                elif in_virtual_server and in_profiles_block and line.endswith('{ context clientside'):
+                    profile_name = line.split(' ')[0]
+                    client_side_profiles.append(profile_name)
+
+                elif in_virtual_server and line == '}' and in_profiles_block:
+                    in_profiles_block = False  # End of the profile block
+
+                elif in_virtual_server and line.startswith('vs-index'):
+                    # Save the current virtual server's information
+                    if virtual_server_name:
+                        results.append({
+                            'virtual_server': virtual_server_name,
+                            'client_side_profiles': client_side_profiles
+                        })
+                    virtual_server_name = None
+                    in_virtual_server = False
+                    client_side_profiles = []
+
+    # Return the list of results
+    return results
+
+# Usage
+config_path = 'path_to_your_config_file.txt'
+virtual_servers = read_config(config_path)
+for server in virtual_servers:
+    print(f"Virtual Server: {server['virtual_server']}")
+    if server['client_side_profiles']:
+        for profile in server['client_side_profiles']:
+            print(f"  Client-side Profile: {profile}")
+    else:
+        print("  No client-side profiles.")
