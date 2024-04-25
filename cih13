@@ -1,0 +1,79 @@
+import re
+
+# Since we do not have the actual file, we will write the function as if we are reading from a file.
+# Let's create a function that will process the configuration lines.
+
+def extract_virtual_server_info(config_lines):
+    """
+    Extracts the virtual server name and associated SSL profile names from the F5 LTM configuration lines.
+    
+    :param config_lines: List of lines from the F5 LTM configuration file.
+    :return: Dictionary with virtual server names as keys and a dict with client and server SSL profile names as values.
+    """
+    # Pattern to find the starting point of relevant configuration
+    start_pattern = re.compile(r'#+\s*MultiConfigPart Running configuration \(Not deployable\)')
+    # Pattern to identify virtual server names
+    virtual_server_pattern = re.compile(r'ltm virtual (\S+)')
+    # Pattern to find the profile names
+    profile_pattern = re.compile(r'(\S+) \{\s*context (clientside|serverside)')
+    # Pattern to identify the end of a virtual server configuration
+    vs_end_pattern = re.compile(r'vs-index \d+')
+
+    # Flags
+    capture = False
+    server_info = {}
+
+    for line in config_lines:
+        # Check for start line
+        if start_pattern.search(line):
+            capture = True
+            continue
+        
+        # If we're not in the relevant part of the config, skip
+        if not capture:
+            continue
+
+        # Check for the end of a virtual server configuration
+        if vs_end_pattern.search(line):
+            current_virtual = None
+            continue
+
+        # Check and capture virtual server name
+        virtual_match = virtual_server_pattern.search(line)
+        if virtual_match and '/common/' not in line:
+            current_virtual = virtual_match.group(1)
+            server_info[current_virtual] = {'clientssl': None, 'serverssl': None}
+            continue
+
+        # Check and capture profile names
+        profile_match = profile_pattern.search(line)
+        if profile_match and current_virtual:
+            profile_name, profile_type = profile_match.groups()
+            if profile_type == 'clientside':
+                server_info[current_virtual]['clientssl'] = profile_name
+            elif profile_type == 'serverside':
+                server_info[current_virtual]['serverssl'] = profile_name
+
+    return server_info
+
+# Note: The function call will be uncommented once we finalize and review the code.
+# Let's assume we have a list of configuration lines as an example.
+# config_lines_example = [
+#     "############ MultiConfigPart Running configuration (Not deployable)",
+#     "ltm virtual example_virtual_server {",
+#     "    profiles {",
+#     "        example_clientsslprofile {",
+#     "            context clientside",
+#     "        }",
+#     "        example_serversslprofile {",
+#     "            context serverside",
+#     "        }",
+#     "        http-xff {",
+#     "            context all",
+#     "        }",
+#     "    }",
+#     "    vs-index 14",
+#     "}"
+# ]
+# info = extract_virtual_server_info(config_lines_example)
+# print(info)
