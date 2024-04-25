@@ -1,0 +1,67 @@
+import re
+
+def read_config(file_path):
+    start_parsing = False
+    virtual_server_name = None
+    client_side_profiles = []
+    results = []
+    profile_block = False
+
+    with open(file_path, 'r') as file:
+        for line in file:
+            line = line.strip()
+
+            # Start parsing after the specific marker text
+            if '############ MultiConfigPart Running configuration (Not deployable)' in line:
+                start_parsing = True
+                continue
+
+            if start_parsing:
+                # Check if a new virtual server block starts
+                if line.startswith('ltm virtual'):
+                    # Check if '/common' is in the server name and skip it
+                    if '/common' in line:
+                        continue
+                    # Save previous virtual server info if exists
+                    if virtual_server_name:
+                        results.append({
+                            'virtual_server': virtual_server_name,
+                            'client_side_profiles': client_side_profiles
+                        })
+                    # Reset for next virtual server
+                    virtual_server_name = line.split(' ')[2]  # Extract virtual server name
+                    client_side_profiles = []
+
+                # Detect the start of a profiles block
+                if 'profiles {' in line:
+                    profile_block = True
+                    continue
+
+                if profile_block:
+                    # Regex to find clientssl profiles with 'context clientside'
+                    match = re.search(r'(\S+) \{ context clientside \}', line)
+                    if match:
+                        client_side_profile = match.group(1)
+                        client_side_profiles.append(client_side_profile)
+                    if '}' in line:  # End of the profile block
+                        profile_block = False
+
+    # Save the last virtual server if the file ends
+    if virtual_server_name:
+        results.append({
+            'virtual_server': virtual_server_name,
+            'client_side_profiles': client_side_profiles
+        })
+
+    return results
+
+# Usage
+config_path = 'path_to_your_config_file.txt'
+virtual_servers = read_config(config_path)
+for server in virtual_servers:
+    print(f"Virtual Server: {server['virtual_server']}")
+    if server['client_side_profiles']:
+        for profile in server['client_side_profiles']:
+            print(f"  Client-side Profile: {profile}")
+    else:
+        print("  No client-side profiles.")
