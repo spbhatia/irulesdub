@@ -1,0 +1,58 @@
+def extract_virtual_servers_and_profiles(config_text):
+    virtual_servers = {}
+    current_virtual_server = None
+    client_profile_candidate = None
+    server_profile_candidate = None
+
+    # Flag to start processing after this marker
+    processing = False
+
+    for line in config_text.split('\n'):
+        line = line.strip()  # Remove leading and trailing whitespace
+
+        if "############ MultiConfigPart Running configuration (Not deployable)" in line:
+            processing = True
+            continue
+
+        if processing:
+            if line.startswith('ltm virtual') and '/common' not in line:
+                # Extracting the virtual server name and reset profile candidates
+                current_virtual_server = line.split(' ')[2]
+                virtual_servers[current_virtual_server] = {'client_side': None, 'server_side': None}
+                client_profile_candidate = None
+                server_profile_candidate = None
+                continue
+
+            if current_virtual_server:
+                if 'context clientside' in line:
+                    virtual_servers[current_virtual_server]['client_side'] = client_profile_candidate
+                    client_profile_candidate = None  # Reset for the next profile
+                elif 'context serverside' in line:
+                    virtual_servers[current_virtual_server]['server_side'] = server_profile_candidate
+                    server_profile_candidate = None  # Reset for the next profile
+                else:
+                    # If this line isn't a context line, it might be a profile line
+                    # Since it's not context, it could be a candidate for either profile
+                    profile_name = line.split(' ')[0] if line else None
+                    # Check if it's directly after a profile name and if so, assign it
+                    if profile_name:
+                        if client_profile_candidate is not None:
+                            server_profile_candidate = profile_name
+                        else:
+                            client_profile_candidate = profile_name
+
+    return virtual_servers
+
+# Main script to read the file and extract information
+def main(config_file_path):
+    with open(config_file_path, 'r') as file:
+        config_text = file.read()
+
+    virtual_servers = extract_virtual_servers_and_profiles(config_text)
+
+    # Output the results
+    for virtual_server, profiles in virtual_servers.items():
+        print(f"Virtual Server: {virtual_server}, Client-Side Profile: {profiles['client_side'] or 'None'}, Server-Side Profile: {profiles['server_side'] or 'None'}")
+
+# Replace 'f5_config.txt' with the actual file path
+main('f5_config.txt')
