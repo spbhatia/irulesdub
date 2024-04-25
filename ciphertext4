@@ -4,6 +4,7 @@ def read_config(file_path):
     client_side_profiles = []
     results = []
     in_virtual_server = False
+    profile_block = False  # Initialize this variable outside the loop to avoid UnboundLocalError
 
     with open(file_path, 'r') as file:
         for line in file:
@@ -20,7 +21,7 @@ def read_config(file_path):
                     if '/common' in line:
                         continue
                     # Save previous virtual server info if exists
-                    if virtual_server_name:
+                    if virtual_server_name and in_virtual_server:
                         results.append({
                             'virtual_server': virtual_server_name,
                             'client_side_profiles': client_side_profiles
@@ -28,6 +29,7 @@ def read_config(file_path):
                     virtual_server_name = line.split(' ')[2]  # Extract virtual server name
                     client_side_profiles = []
                     in_virtual_server = True  # Now inside a virtual server block
+                    profile_block = False  # Reset profile block status
 
                 # Detect end of virtual server block
                 if 'vs-index' in line and in_virtual_server:
@@ -38,21 +40,22 @@ def read_config(file_path):
                     virtual_server_name = None
                     client_side_profiles = []
                     in_virtual_server = False
+                    profile_block = False  # Ensure profile block is also reset
                     continue
 
                 # Find client-side profiles within the 'profiles' block if in a virtual server block
-                if in_virtual_server and 'profiles {' in line:
-                    profile_block = True
-                    continue
+                if in_virtual_server:
+                    if 'profiles {' in line:
+                        profile_block = True
+                    elif '}' in line and profile_block:
+                        profile_block = False  # End of the profile block
 
-                if in_virtual_server and profile_block:
-                    # Regex to find clientssl profiles with 'context clientside'
-                    match = re.search(r'(\S+) \{ context clientside \}', line)
-                    if match:
-                        client_side_profile = match.group(1)
-                        client_side_profiles.append(client_side_profile)
-                    if '}' in line:  # End of the profile block
-                        profile_block = False
+                    if profile_block:
+                        # Regex to find clientssl profiles with 'context clientside'
+                        match = re.search(r'(\S+) \{ context clientside \}', line)
+                        if match:
+                            client_side_profile = match.group(1)
+                            client_side_profiles.append(client_side_profile)
 
     return results
 
