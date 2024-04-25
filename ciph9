@@ -1,0 +1,52 @@
+def extract_virtual_servers_and_profiles(config_text):
+    virtual_servers = {}
+    current_virtual_server = None
+    profile_candidate = None  # This will hold the potential profile name
+
+    # Flag to start processing after this marker
+    processing = False
+
+    for line in config_text.split('\n'):
+        line = line.strip()  # Remove leading and trailing whitespace
+
+        # Start processing after the marker
+        if "############ MultiConfigPart Running configuration (Not deployable)" in line:
+            processing = True
+            continue
+
+        if processing:
+            # Detect the start of a virtual server block
+            if line.startswith('ltm virtual') and '/common' not in line:
+                current_virtual_server = line.split(' ')[2]  # Extracting the virtual server name
+                virtual_servers[current_virtual_server] = None  # Initialize with None
+                continue
+
+            # If we're in a virtual server block, look for the profile name
+            if current_virtual_server:
+                if 'context clientside' in line:
+                    # The line before this one should contain the profile name
+                    virtual_servers[current_virtual_server] = profile_candidate
+                    profile_candidate = None  # Reset for the next profile
+                else:
+                    # This line might contain the profile name, so store it temporarily
+                    profile_candidate = line.split(' ')[0] if line else None
+
+            # Check for the end of a virtual server block marked by 'vs-index'
+            if current_virtual_server and 'vs-index' in line:
+                current_virtual_server = None  # Reset for the next virtual server block
+
+    return virtual_servers
+
+# Main script to read the file and extract information
+def main(config_file_path):
+    with open(config_file_path, 'r') as file:
+        config_text = file.read()
+
+    virtual_servers = extract_virtual_servers_and_profiles(config_text)
+
+    # Output the results
+    for virtual_server, profile in virtual_servers.items():
+        print(f"Virtual Server: {virtual_server}, Client-Side Profile: {profile or 'None'}")
+
+# Call the main function with the filename
+main('f5_config.txt')
