@@ -1,0 +1,85 @@
+import re
+import pandas as pd
+
+def read_and_identify_all_profiles(file_path):
+    parsing = False
+    current_virtual = None
+    data = {}
+    all_clientssl_profiles = set()
+    all_serverssl_profiles = set()
+
+    with open(file_path, 'r') as file:
+        previous_line = None  # To store the line immediately before the current line
+        for line in file:
+            line = line.strip()
+            
+            if line == "############ MultiConfigPart Running configuration (Not deployable)":
+                parsing = True
+                continue
+
+            if not parsing:
+                continue
+            
+            if 'vs-index' in line:
+                current_virtual = None
+                continue
+            
+            # Capture all client-side SSL profile names
+            if line.startswith('ltm profile client-ssl'):
+                profile_name = line.split()[-1]
+                all_clientssl_profiles.add(profile_name)
+            
+            # Capture all server-side SSL profile names
+            if line.startswith('ltm profile server-ssl'):
+                profile_name = line.split()[-1]
+                all_serverssl_profiles.add(profile_name)
+            
+            if line.startswith('ltm virtual ') and '/common' not in line:
+                parts = line.split()
+                if len(parts) >= 3:
+                    current_virtual = parts[2]
+                    data[current_virtual] = {
+                        "clientssl": None,
+                        "serverssl": None
+                    }
+                continue
+            
+            if current_virtual:
+                if 'context clientside' in line:
+                    if previous_line:
+                        cleaned_name = re.sub(r'[{}]', '', previous_line).strip()
+                        data[current_virtual]['clientssl'] = cleaned_name
+                elif 'context serverside' in line:
+                    if previous_line:
+                        cleaned_name = re.sub(r'[{}]', '', previous_line).strip()
+                        data[current_virtual]['serverssl'] = cleaned_name
+
+            previous_line = line  # Update previous_line at the end of the loop
+
+    # Identify used and unused profiles
+    used_clientssl_profiles = {v['clientssl'] for v in data.values() if v['clientssl']}
+    used_serverssl_profiles = {v['serverssl'] for v in data.values() if v['serverssl']}
+    unused_clientssl_profiles = all_clientssl_profiles - used_clientssl_profiles
+    unused_serverssl_profiles = all_serverssl_profiles - used_serverssl_profiles
+
+    return data, all_clientssl_profiles, all_serverssl_profiles, unused_clientssl_profiles, unused_serverssl_profiles
+
+def write_profiles_to_excel(data, all_clients, all_servers, unused_clients, unused_servers, file_name='profile_data.xlsx'):
+    used_client_ssl_data = [{'Virtual Server': k, 'Client-SSL Profile': v['clientssl']} for k, v in data.items() if v['clientssl']]
+    used_server_ssl_data = [{'Virtual Server': k, 'Server-SSL Profile': v['serverssl']} for k, v in data.items() if v['serverssl']]
+    all_client_ssl_data = [{'All Client-SSL Profile': profile} for profile in all_clients]
+    all_server_ssl_data = [{'All Server-SSL Profile': profile} for profile in all_servers]
+    unused_client_ssl_data = [{'Unused Client-SSL Profile': profile} for profile in unused_clients]
+    unused_server_ssl_data = [{'Unused Server-SSL Profile': profile} for profile in unused_servers]
+    
+    with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+        pd.DataFrame(used_client_ssl_data).to_excel(writer, sheet_name='Used Client-SSL Profiles', index=False)
+        pd.DataFrame(used_server_ssl_data).to_excel(writer, sheet_name='Used Server-SSL Profiles', index=False)
+        pd.DataFrame(all_client_ssl_data).to_excel(writer, sheet_name='All Client-SSL Profiles', index=False)
+        pd.DataFrame(all_server_ssl_data).to_excel(writer, sheet_name='All Server-SSL Profiles', index=False)
+        pd.DataFrame(unused_client_ssl_data).to_excel(writer, sheet_name='Unused Client-SSL Profiles', index=False)
+        pd.DataFrame(unused_server_ssl_data).to_excel(writer, sheet_name='Unused Server-SSL Profiles', index=False)
+
+# Example usage (Uncomment the lines below to use)
+# config_data, all_clients, all_servers, unused_clients, unused_servers = read_and_identify_all_profiles("path_to_your_ltm_config_file.txt")
+# write_profiles_to_excel(config_data, all_clients, all_servers, unused_clients, unused_servers)
