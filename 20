@@ -1,0 +1,70 @@
+import re
+import pandas as pd
+
+def read_ltm_config(file_path):
+    parsing = False
+    current_virtual = None
+    data = {}
+
+    with open(file_path, 'r') as file:
+        previous_line = None  # To store the line immediately before the current line
+        for line in file:
+            line = line.strip()
+            
+            if line == "############ MultiConfigPart Running configuration (Not deployable)":
+                parsing = True
+                continue
+
+            if not parsing:
+                continue
+            
+            if 'vs-index' in line:
+                current_virtual = None
+                continue
+            
+            if line.startswith('ltm virtual ') and '/common' not in line:
+                parts = line.split()
+                if len(parts) >= 3:
+                    current_virtual = parts[2]
+                    data[current_virtual] = {
+                        "clientssl": None,
+                        "serverssl": None
+                    }
+                continue
+            
+            if current_virtual:
+                if 'context clientside' in line:
+                    if previous_line:
+                        # Remove brackets and extra spaces
+                        cleaned_name = re.sub(r'[{}]', '', previous_line).strip()
+                        data[current_virtual]['clientssl'] = cleaned_name
+                elif 'context serverside' in line:
+                    if previous_line:
+                        # Remove brackets and extra spaces
+                        cleaned_name = re.sub(r'[{}]', '', previous_line).strip()
+                        data[current_virtual]['serverssl'] = cleaned_name
+
+            previous_line = line  # Update previous_line at the end of the loop
+
+    return data
+
+def write_to_excel(data, file_name='config_data.xlsx'):
+    client_ssl_data = []
+    server_ssl_data = []
+    
+    for virtual_server, profiles in data.items():
+        if profiles['clientssl']:
+            client_ssl_data.append({'Virtual Server': virtual_server, 'Client-SSL Profile': profiles['clientssl']})
+        if profiles['serverssl']:
+            server_ssl_data.append({'Virtual Server': virtual_server, 'Server-SSL Profile': profiles['serverssl']})
+    
+    df_client_ssl = pd.DataFrame(client_ssl_data)
+    df_server_ssl = pd.DataFrame(server_ssl_data)
+    
+    with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+        df_client_ssl.to_excel(writer, sheet_name='Used Client-ssl profile', index=False)
+        df_server_ssl.to_excel(writer, sheet_name='Used Server-ssl profile', index=False)
+
+# Example usage (Uncomment the lines below to use)
+# config_data = read_ltm_config("path_to_your_ltm_config_file.txt")
+# write_to_excel(config_data)
