@@ -1,0 +1,50 @@
+import re
+
+# Define the function to extract the virtual server names and client-side profiles
+def extract_virtual_servers_and_profiles(config_text):
+    virtual_servers = {}
+    capture = False
+    for line in config_text.split('\n'):
+        # Check for the marker line to start processing
+        if "############ MultiConfigPart Running configuration (Not deployable)" in line:
+            capture = True
+            continue
+        
+        if capture:
+            # Check if line contains a virtual server definition
+            if line.strip().startswith('ltm virtual') and '/common' not in line:
+                # Extract the name of the virtual server
+                virtual_name = line.split(' ')[2]
+                
+                # Set up a placeholder for the client-side profile
+                virtual_servers[virtual_name] = {
+                    'client_side_profile': None
+                }
+            
+            # Check if line contains a profile and it is the most recent virtual server's property
+            if 'profiles' in line and virtual_name:
+                # Use regex to match and extract the client-side profile
+                match = re.search(r'{ ([\w-]+)', line)
+                if match:
+                    # Extract the client-side profile name
+                    client_side_profile = match.group(1)
+                    # Assign the profile to the current virtual server
+                    virtual_servers[virtual_name]['client_side_profile'] = client_side_profile
+    
+    return virtual_servers
+
+# Main script to read the file and extract information
+def main(config_file_path):
+    # Read the file
+    with open(config_file_path, 'r') as file:
+        config_text = file.read()
+    
+    # Extract virtual servers and profiles
+    virtual_servers = extract_virtual_servers_and_profiles(config_text)
+    
+    # Output the results
+    for virtual_server, details in virtual_servers.items():
+        print(f"Virtual Server: {virtual_server}, Client-Side Profile: {details['client_side_profile']}")
+
+# Replace 'path_to_config_file.txt' with the actual path to your F5 LTM configuration file
+# main('path_to_config_file.txt')
