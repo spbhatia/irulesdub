@@ -1,0 +1,28 @@
+import pandas as pd
+
+def write_to_excel(data, file_name='config_data.xlsx'):
+    # Create DataFrames for client-ssl and server-ssl profiles
+    client_ssl_data = []
+    server_ssl_data = []
+    
+    for virtual_server, profiles in data.items():
+        if profiles['clientssl']:
+            client_ssl_data.append({'Virtual Server': virtual_server, 'Client-SSL Profile': profiles['clientssl']})
+        if profiles['serverssl']:
+            server_ssl_data.append({'Virtual Server': virtual_server, 'Server-SSL Profile': profiles['serverssl']})
+    
+    # Convert lists to DataFrames
+    df_client_ssl = pd.DataFrame(client_ssl_data)
+    df_server_ssl = pd.DataFrame(server_ssl_data)
+    
+    # Write to Excel with two different sheets
+    with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+        df_client_ssl.to_excel(writer, sheet_name='Used Client-ssl profile', index=False)
+        df_server_ssl.to_excel(writer, sheet_name='Used Server-ssl profile', index=False)
+
+# Example usage
+# config_data = read_ltm_config("path_to_your_ltm_config_file.txt")
+# write_to_excel(config_data)
+# This will write the output to 'config_data.xlsx' with two sheets for client and server SSL profiles.
+
+# Uncomment the function calls above for actual usage after adjusting the file path. This will parse the file, extract the data, and write it to an Excel file.
