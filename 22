@@ -1,0 +1,109 @@
+import re
+import pandas as pd
+
+# Function to parse the LTM config file and extract necessary details
+def read_and_identify_all_profiles_with_details(file_path):
+    parsing = False
+    current_virtual = None
+    data = {}
+    all_clientssl_profiles = set()
+    all_serverssl_profiles = set()
+    client_ssl_details = {}
+
+    with open(file_path, 'r') as file:
+        in_client_ssl_block = False
+        current_client_ssl = None
+        for line in file:
+            line = line.strip()
+
+            # Start parsing after the specific header is found
+            if line == "############ MultiConfigPart Running configuration (Not deployable)":
+                parsing = True
+                continue
+
+            if not parsing:
+                continue
+
+            if 'vs-index' in line:
+                current_virtual = None
+                continue
+
+            # Detect start of client-ssl profile block
+            if line.startswith('ltm profile client-ssl'):
+                current_client_ssl = line.split()[-1]
+                in_client_ssl_block = True
+                client_ssl_details[current_client_ssl] = {
+                    'cipher': None,
+                    'options': None
+                }
+                continue
+
+            # Detect end of client-ssl profile block
+            if in_client_ssl_block and 'unclean-shutdown' in line:
+                in_client_ssl_block = False
+                continue
+
+            # Extract details within client-ssl profile block
+            if in_client_ssl_block:
+                if line.startswith('ciphers '):
+                    cipher_value = line.split(' ', 1)[1].strip()
+                    client_ssl_details[current_client_ssl]['cipher'] = cipher_value
+                elif line.startswith('options {'):
+                    options_value = line.split('{', 1)[1].rstrip('}').strip()
+                    client_ssl_details[current_client_ssl]['options'] = options_value
+
+            # Process virtual server blocks
+            if line.startswith('ltm virtual ') and '/common' not in line:
+                parts = line.split()
+                if len(parts) >= 3:
+                    current_virtual = parts[2]
+                    data[current_virtual] = {
+                        "clientssl": None,
+                        "serverssl": None,
+                        "cipher": None,
+                        "options": None
+                    }
+                continue
+
+            # Capture the profiles associated with the virtual servers
+            if current_virtual:
+                if 'context clientside' in line:
+                    if previous_line:
+                        cleaned_name = re.sub(r'[{}]', '', previous_line).strip()
+                        data[current_virtual]['clientssl'] = cleaned_name
+                        # Capture the details from the client-ssl profiles dictionary
+                        if cleaned_name in client_ssl_details:
+                            data[current_virtual]['cipher'] = client_ssl_details[cleaned_name]['cipher']
+                            data[current_virtual]['options'] = client_ssl_details[cleaned_name]['options']
+                elif 'context serverside' in line:
+                    if previous_line:
+                        cleaned_name = re.sub(r'[{}]', '', previous_line).strip()
+                        data[current_virtual]['serverssl'] = cleaned_name
+
+            # Keep the previous line handy for the next iteration
+            previous_line = line
+
+    return data, client_ssl_details
+
+# Function to write the extracted details to an Excel file
+def write_profiles_to_excel_with_details(data, client_ssl_details, file_name='profile_data.xlsx'):
+    used_client_ssl_data = []
+    for virtual_server, details in data.items():
+        if details['clientssl']:
+            used_client_ssl_data.append({
+                'Virtual Server': virtual_server,
+                'Client-SSL Profile': details['clientssl'],
+                'Cipher': details['cipher'],
+                'Options': details['options']
+            })
+
+    # Create a Pandas DataFrame and write it to an Excel file
+    df_used_client_ssl = pd.DataFrame(used_client_ssl_data)
+    
+    with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+        df_used_client_ssl.to_excel(writer, sheet_name='Used Client-SSL Profiles', index=False)
+
+# Example usage:
+# Replace 'path_to_your_ltm_config_file.txt' with your actual file path.
+# config_data, client_ssl_details = read_and_identify_all_profiles_with_details('path_to_your_ltm_config_file.txt')
+# write_profiles_to_excel_with_details(config_data, client_ssl_details)
