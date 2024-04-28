@@ -1,0 +1,7 @@
+<VirtualHost *:8080>
+    ServerAdmin webmaster@localhost
+    DocumentRoot "/var/www/service1"
+    ServerName server.domain.com
+    ErrorLog logs/service1_error.log
+    CustomLog logs/service1_access.log common
+</VirtualHost>
