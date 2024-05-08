@@ -1,0 +1,76 @@
+import re
+import pandas as pd
+
+def read_and_identify_all_profiles(file_path):
+    parsing = False
+    in_ssl_profile = False
+    current_virtual = None
+    data = {}
+    ssl_profile_details = {}
+
+    with open(file_path, 'r') as file:
+        for line in file:
+            line = line.strip()
+            
+            # Start capturing client-SSL profile details
+            if line.startswith('ltm profile client-ssl'):
+                profile_name = line.split()[-1].strip('()')
+                in_ssl_profile = True
+                ssl_profile_details[profile_name] = {'Ciphers': '', 'Options': ''}
+                continue
+
+            if in_ssl_profile:
+                if 'ciphers' in line:
+                    ssl_profile_details[profile_name]['Ciphers'] = line.split('ciphers')[-1].strip()
+                if 'options {' in line:
+                    ssl_profile_details[profile_name]['Options'] = re.search(r'\{(.+)\}', line).group(1).strip()
+                if 'unclean-shutdown' in line:
+                    in_ssl_profile = False
+            
+            if line.startswith('ltm virtual') and '/common' not in line:
+                current_virtual = line.split()[-1]
+                data[current_virtual] = ssl_profile_details.copy()  # Copy current SSL profiles to the virtual server
+                ssl_profile_details = {}  # Reset for the next SSL profile
+
+            if 'vs-index' in line and current_virtual:
+                current_virtual = None  # End current virtual server section
+
+    return data
+
+def write_profiles_to_excel(data, file_name='profile_data.xlsx'):
+    used_client_ssl_data = []
+    all_client_ssl_data = []
+
+    # Prepare data for Excel output
+    for server, profiles in data.items():
+        for profile_name, details in profiles.items():
+            used_client_ssl_data.append({
+                'Virtual Server': server,
+                'Client-SSL Profile': profile_name,
+                'Ciphers': details['Ciphers'],
+                'Options': details['Options']
+            })
+            if profile_name not in all_client_ssl_data:
+                all_client_ssl_data.append({
+                    'Client-SSL Profile': profile_name,
+                    'Ciphers': details['Ciphers'],
+                    'Options': details['Options']
+                })
+
+    # Write data to Excel using pandas
+    with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+        pd.DataFrame(used_client_ssl_data).to_excel(writer, sheet_name='Used Client-SSL Profiles', index=False)
+        pd.DataFrame(all_client_ssl_data).to_excel(writer, sheet_name='All Client-SSL Profiles', index=False)
+
+        # Assuming all profiles are used at least once, you can modify this if you have specific criteria for unused profiles
+        all_profile_names = set([p['Client-SSL Profile'] for p in all_client_ssl_data])
+        used_profile_names = set([p['Client-SSL Profile'] for p in used_client_ssl_data])
+        unused_profile_names = all_profile_names - used_profile_names
+        unused_client_ssl_data = [{'Client-SSL Profile': name} for name in unused_profile_names]
+        pd.DataFrame(unused_client_ssl_data).to_excel(writer, sheet_name='Unused Client-SSL Profiles', index=False)
+
+# Example usage
+if __name__ == "__main__":
+    config_path = "path_to_your_config_file.conf"  # Adjust the path as necessary
+    config_data = read_and_identify_all_profiles(config_path)
+    write_profiles_to_excel(config_data)
