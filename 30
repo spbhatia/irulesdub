@@ -1,0 +1,64 @@
+import re
+import pandas as pd
+
+def read_and_identify_all_profiles(file_path):
+    parsing = False
+    current_virtual = None
+    data = {}
+
+    all_clientssl_profiles = set()
+    all_serverssl_profiles = set()
+
+    profile_details = {}
+
+    with open(file_path, 'r') as file:
+        content = file.read()
+
+        # Parsing for each client-ssl and server-ssl
+        blocks = re.split(r'ltm profile (client-ssl|server-ssl) (\S+) {', content)
+        
+        for i in range(1, len(blocks), 3):
+            profile_type = blocks[i]
+            profile_name = blocks[i+1]
+            block = blocks[i+2]
+            end_block_index = block.find("}")  # find the end of the block
+            block = block[:end_block_index]
+
+            # Capture ciphers and options
+            ciphers = re.search(r'^\s*ciphers\s+(.*)$', block, re.MULTILINE)
+            options = re.search(r'^\s*options\s+(.*)$', block, re.MULTILINE)
+
+            # Store data for Excel and dictionary
+            profile_key = f"{profile_type} {profile_name}"
+            data[profile_key] = {
+                'clientssl': profile_name if profile_type == 'client-ssl' else None,
+                'serverssl': profile_name if profile_type == 'server-ssl' else None,
+                'ciphers': ciphers.group(1) if ciphers else 'None',
+                'options': options.group(1) if options else 'None'
+            }
+
+            # Maintain a set of all profiles
+            if profile_type == 'client-ssl':
+                all_clientssl_profiles.add(profile_name)
+            else:
+                all_serverssl_profiles.add(profile_name)
+
+    return data, all_clientssl_profiles, all_serverssl_profiles
+
+def write_profiles_to_excel(data, all_clients, all_servers, file_name='profile_data.xlsx'):
+    used_client_ssl_data = [{'Virtual Server': k, 'Client-SSL Profile': v['clientssl'], 'Ciphers': v['ciphers'], 'Options': v['options']}
+                            for k, v in data.items() if v['clientssl']]
+    used_server_ssl_data = [{'Virtual Server': k, 'Server-SSL Profile': v['serverssl'], 'Ciphers': v['ciphers'], 'Options': v['options']}
+                            for k, v in data.items() if v['serverssl']]
+    all_client_ssl_data = [{'All Client-SSL Profile': profile} for profile in all_clients]
+    all_server_ssl_data = [{'All Server-SSL Profile': profile} for profile in all_servers]
+
+    with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+        pd.DataFrame(used_client_ssl_data).to_excel(writer, sheet_name='Used Client-SSL Profiles', index=False)
+        pd.DataFrame(used_server_ssl_data).to_excel(writer, sheet_name='Used Server-SSL Profiles', index=False)
+        pd.DataFrame(all_client_ssl_data).to_excel(writer, sheet_name='All Client-SSL Profiles', index=False)
+        pd.DataFrame(all_server_ssl_data).to_excel(writer, sheet_name='All Server-SSL Profiles', index=False)
+
+# Example usage (Uncomment the lines below to use)
+# config_data, all_clients, all_servers = read_and_identify_all_profiles("your_config_file.conf")
+# write_profiles_to_excel(config_data, all_clients, all_servers)
