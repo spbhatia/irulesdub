@@ -1,0 +1,110 @@
+Import re
+
+import pandas as pd
+
+def read and identify_all_profiles(file_path):
+
+parsing False
+
+current_virtual None
+
+data {}
+
+all_clientssl_profiles = set()
+
+all_serverssl_profiles = set()
+
+with open(file path, 'r') as file: previous_line None
+
+for line in file:
+
+line line.strip()
+
+To store the line immediately before the current line
+
+if line "sssssssssss MultiConfigPart Running configuration (Not deployable)":
+
+parsing True continue
+
+if not parsing:
+
+continue
+
+If 'vs-index" in line: current virtual = None
+
+continue
+
+capture all client-side SSL profile names if line.startswith('Itm profile client-ssl'):
+
+profile name line.split()[-2] all_clientssl_profiles.add(profile_name)
+
+#Capture all server-side SSL profile names if line.startswith("ltm profile server-ssl'):
+
+profile_name line.split()[-2] all_serverssl_profiles.add(profile_name)
+
+if line.startswith("Itm virtual) and /common not in line:
+
+parts line.split() If len(parts) > 3:
+
+current virtual
+
+parts[2]
+
+data[current virtual] = {
+
+"clientssl": None, "serverssl": None
+
+I
+
+
+continue
+
+if current virtual:
+
+if 'context clientside in line:
+
+If previous line:
+
+cleaned namere.sub(r' [[]]','", previous_line).strip()
+
+data[current virtual]['clientssl'] cleaned_name
+
+elif context serverside in line: if
+
+previous line:
+
+cleaned name re.sub(r[{}]', '', previous line).strip()
+
+data[current_virtual]['serverssl'] cleaned_name
+
+previous line line update previous line at the end of the loop
+
+Identify used and unused profiles
+
+used clientssl profiles (v['clientssl'] for v in data.values() if v['clientssl"]} used serverss1 profiles (v['serverss]'] for v in data.values() if v['serverssl'])
+
+unused_clientssl profiles all_clientssl_profiles used clientssi profiles unused_serverssl_profiles all_serverssl_profiles used serverssl profiles
+
+return data, all clientssl_profiles, all serverssi profiles, unused clientssl profiles, unused serverssl_profiles
+
+def write profiles to excel(data, all clients, all servers, unused clients, unused servers, file_name 'profile_data.xlsx'):
+
+used_client_ssl_data[{'Virtual Server: k, 'client-SSL Profile': ['clientssl']) for k, v in data.items() if v['clientssl']] used server_ssl_data[{"Virtual Server: k, Server-SSL Profile': ['serverssl']} for k, v in data.items() if
+
+v['serverssl']]
+
+all client ssl data [{'All client-SSL Profile': profile) for profile in all clients)
+
+all server_ssl_data[{'All Server-SSL. Profile': profile) for profile in all_servers) unused client ssl data [['Unused client-SSL Profile': profile) for profile in unused_clients] unused server ssl data [{'Unused Server-SSL Profile: profile) for profile in unused_servers]
+
+with pd.Excelwriter(file name, engine'openpyxl') as writer: I
+
+pd.DataFrame(used client ssl data).to excel (writer, sheet_name='Used Client-551. Profiles', index-False)
+
+pd.DataFrame(used server_ssl data).to excel (writer, sheet name 'Used Server-5SL Profiles', index-False)
+
+pd.DataFrame(all_client_ssl_data).to excel(writer, sheet name-'All client-SSL Profiles', index-False) pd.DataFrame(all server_ssl_data).to excel(writer, sheet name 'All Server SSL Profiles', index-False)
+
+pd.Dataframe (unused client ssl data).to excel (writer, sheet name 'Unused Client SSL Profiles', index-False) pd.Dataframe (unused_server_ssl_data).to excel (writer, sheet name 'Unused Server SSL Profiles', index False)
+
+Example usage (Uncomment the lines below to use) config data, all clients, all servers, unused clients, unused_servers read_and_identify all_profiles("usnlildcad114.conf.txt") write profiles to excel (config data, all clients, all servers, unused clients, unused servers)
