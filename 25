@@ -1,0 +1,72 @@
+import re
+import pandas as pd
+
+def read_and_identify_all_profiles(file_path):
+    parsing = False
+    in_ssl_profile = False
+    current_virtual = None
+    data = {}
+    all_clientssl_profiles = set()
+    all_serverssl_profiles = set()
+    client_ssl_details = {}
+    
+    with open(file_path, 'r') as file:
+        for line in file:
+            line = line.strip()
+            
+            # Start capturing client-ssl profile details
+            if 'ltm profile client-ssl' in line:
+                profile_name = line.split()[-1].strip("()")
+                all_clientssl_profiles.add(profile_name)
+                in_ssl_profile = True
+                current_profile = {'Ciphers': '', 'Options': ''}
+                continue
+
+            if in_ssl_profile:
+                if 'ciphers' in line:
+                    current_profile['Ciphers'] = line.split()[-1]
+                if 'options {' in line:
+                    current_profile['Options'] = line.split('{')[1].strip('}')
+                if 'unclean-shutdown' in line:
+                    client_ssl_details[profile_name] = current_profile
+                    in_ssl_profile = False
+            
+            if 'ltm virtual' in line and '/common' not in line:
+                if current_virtual:
+                    # Save the previous virtual server's information
+                    if current_virtual in data:
+                        data[current_virtual].update(client_ssl_details)
+                    else:
+                        data[current_virtual] = client_ssl_details
+                current_virtual = line.split()[-1]
+                client_ssl_details = {}  # Reset for the next virtual server
+
+            if 'vs-index' in line and current_virtual:
+                # Save the current virtual server's information
+                if current_virtual in data:
+                    data[current_virtual].update(client_ssl_details)
+                else:
+                    data[current_virtual] = client_ssl_details
+                current_virtual = None  # Reset for the next virtual server block
+
+    return data, all_clientssl_profiles, client_ssl_details
+
+def write_profiles_to_excel(data, all_clients, file_name='profile_data.xlsx'):
+    # Prepare data for Excel output
+    used_client_ssl_data = []
+    for k, v in data.items():
+        if v.get('clientssl'):
+            used_client_ssl_data.append({
+                'Virtual Server': k,
+                'Client-SSL Profile': v['clientssl'],
+                'Ciphers': v.get('Ciphers', ''),
+                'Options': v.get('Options', '')
+            })
+
+    # Write to Excel using pandas
+    with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+        pd.DataFrame(used_client_ssl_data).to_excel(writer, sheet_name='Used Client-SSL Profiles', index=False)
+
+# Example usage
+config_data, all_clients, client_ssl_details = read_and_identify_all_profiles("your_config_file.conf")
+write_profiles_to_excel(config_data, all_clients)
