@@ -1,0 +1,62 @@
+import re
+
+def read_and_identify_all_profiles(file_path):
+    parsing = False
+    current_virtual = None
+    data = {}
+
+    with open(file_path, 'r') as file:
+        for line in file:
+            line = line.strip()
+
+            # Start parsing after this header
+            if line == "########## MultiConfigPart Running configuration (Not deployable)":
+                parsing = True
+                continue
+
+            if not parsing:
+                continue
+
+            if line.startswith('ltm virtual ') and '/common' not in line:
+                parts = line.split()
+                if len(parts) >= 3:
+                    current_virtual = parts[2]
+                    data[current_virtual] = {
+                        "clientssl": None,
+                        "serverssl": None,
+                        "ciphers": None,
+                        "options": None
+                    }
+
+            # Match the profile lines and capture subsequent ciphers and options
+            if current_virtual:
+                if line.startswith('ltm profile client-ssl'):
+                    profile_name = line.split()[-1]
+                    data[current_virtual]['clientssl'] = profile_name
+
+                elif line.startswith('ltm profile server-ssl'):
+                    profile_name = line.split()[-1]
+                    data[current_virtual]['serverssl'] = profile_name
+
+                elif 'ciphers' in line:
+                    ciphers = line.split('ciphers', 1)[1].strip()
+                    data[current_virtual]['ciphers'] = ciphers
+
+                elif 'options' in line:
+                    options = line.split('options', 1)[1].strip()
+                    data[current_virtual]['options'] = options
+
+    return data
+
+def print_virtual_server_info(data):
+    for virtual, details in data.items():
+        print(f"Virtual Server: {virtual}")
+        print(f"  Client-SSL Profile: {details['clientssl']}")
+        print(f"  Server-SSL Profile: {details['serverssl']}")
+        print(f"  Ciphers: {details['ciphers']}")
+        print(f"  Options: {details['options']}")
+        print("")
+
+# Example usage:
+# config_data = read_and_identify_all_profiles("path_to_configuration_file.conf")
+# print_virtual_server_info(config_data)
