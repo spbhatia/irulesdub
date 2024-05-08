@@ -1,0 +1,68 @@
+import re
+import pandas as pd
+
+def read_and_identify_all_profiles(file_path):
+    parsing = False
+    data = {}
+    all_clientssl_profiles = set()
+    profile_details = {}
+
+    with open(file_path, 'r') as file:
+        for line in file:
+            line = line.strip()
+
+            # Start parsing after the specific header is found
+            if "sssssssssss MultiConfigPart Running configuration (Not deployable)" in line:
+                parsing = True
+                continue
+            
+            if not parsing:
+                continue
+
+            # Check for client-ssl profile blocks
+            if line.startswith('ltm profile client-ssl'):
+                current_profile = line.split()[-1].strip(" {")
+                all_clientssl_profiles.add(current_profile)
+                profile_details[current_profile] = {'Ciphers': '', 'Options': ''}
+                in_ssl_block = True
+                continue
+
+            if in_ssl_block:
+                if "Ciphers" in line:
+                    cipher_name = line.split()[-1]
+                    profile_details[current_profile]['Ciphers'] = cipher_name
+                if "Options" in line:
+                    options = re.search(r'\{(.+?)\}', line).group(1)
+                    profile_details[current_profile]['Options'] = options
+                if "unclean-shutdown" in line:
+                    in_ssl_block = False
+
+    # Determine which profiles are used
+    # Note: Logic for identifying used profiles would go here based on your system's requirements
+
+    return profile_details, all_clientssl_profiles
+
+def write_profiles_to_excel(profile_details, all_clientssl_profiles, file_name='profile_data.xlsx'):
+    profile_data = []
+    for profile, details in profile_details.items():
+        profile_data.append({
+            'Client-SSL Profile': profile,
+            'Ciphers': details['Ciphers'],
+            'Options': details['Options']
+        })
+
+    unused_profiles = [
+        {
+            'Client-SSL Profile': profile,
+            'Ciphers': details['Ciphers'],
+            'Options': details['Options']
+        } for profile, details in profile_details.items() if profile not in used_profiles
+    ]
+
+    with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
+        pd.DataFrame(profile_data).to_excel(writer, sheet_name='Used Client-SSL Profiles', index=False)
+        pd.DataFrame(unused_profiles).to_excel(writer, sheet_name='Unused Client-SSL Profiles', index=False)
+
+# Example usage (Uncomment the lines below to use)
+# profile_details, all_clientssl_profiles = read_and_identify_all_profiles("usnlildcad114.conf.txt")
+# write_profiles_to_excel(profile_details, all_clientssl_profiles)
