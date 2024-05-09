@@ -1,9 +1,3 @@
-def find_unused_profiles(all_profiles, used_profiles):
-    """Identify profiles that are not used in any virtual server."""
-    used_names = {prof['name'] for prof in used_profiles}
-    unused_profiles = [prof for prof in all_profiles if prof['name'] not in used_names]
-    return unused_profiles
-
 def create_excel(client_profiles, server_profiles, virtual_servers):
     """Create an Excel file with extracted data, including unused SSL profiles."""
     client_data = []
@@ -13,8 +7,9 @@ def create_excel(client_profiles, server_profiles, virtual_servers):
 
     # Prepare data and collect used profiles
     for vs in virtual_servers:
-        if vs['client-ssl']:
-            client_profile = next((cp for cp in client_profiles if cp['name'] == vs['client-ssl']), None)
+        client_profile_name = vs.get('client-ssl')  # Use .get() to safely access dictionary keys
+        if client_profile_name:
+            client_profile = next((cp for cp in client_profiles if cp['name'] == client_profile_name), None)
             if client_profile:
                 client_data.append({
                     'Virtual Server Name': vs['name'],
@@ -23,8 +18,10 @@ def create_excel(client_profiles, server_profiles, virtual_servers):
                     'Options': client_profile['options']
                 })
                 used_client_profiles.append(client_profile)
-        if vs['server-ssl']:
-            server_profile = next((sp for sp in server_profiles if sp['name'] == vs['server-ssl']), None)
+
+        server_profile_name = vs.get('server-ssl')  # Use .get() to safely access dictionary keys
+        if server_profile_name:
+            server_profile = next((sp for sp in server_profiles if sp['name'] == server_profile_name), None)
             if server_profile:
                 server_data.append({
                     'Virtual Server Name': vs['name'],
