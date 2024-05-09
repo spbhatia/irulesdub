@@ -113,3 +113,24 @@ create_excel(client_profiles, virtual_servers)
 
 # The above code blocks are commented out to prevent execution here.
 # They would be uncommented and organized appropriately for execution in a Python environment after reviewing.
+
+import pandas as pd
+
+def create_excel(profiles, virtual_servers):
+    """Create an Excel file with the extracted data using openpyxl."""
+    # Creating DataFrame for Client-SSL Profiles
+    client_profiles_data = []
+    for virtual in virtual_servers:
+        for profile in profiles:
+            if profile['name'] == virtual['client-ssl']:
+                client_profiles_data.append({
+                    'Virtual Server Name': virtual['name'],
+                    'Client-SSL Profiles Name': profile['name'],
+                    'Ciphers Name': profile['ciphers'],
+                    'Options': profile['options']
+                })
+    
+    df_clients = pd.DataFrame(client_profiles_data)
+    writer = pd.ExcelWriter('SSL_Profiles.xlsx', engine='openpyxl')
+    df_clients.to_excel(writer, sheet_name='Used Client-SSL Profiles', index=False)
+    writer.save()
