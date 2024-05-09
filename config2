@@ -1,0 +1,115 @@
+# Writing the code to handle the provided tasks
+
+# Assuming the configuration is stored in "config.txt"
+# and the output needs to be an Excel file "SSL_Profiles.xlsx"
+
+import re
+from pathlib import Path
+import pandas as pd
+
+def read_config(file_path):
+    """Read the configuration file starting from the specified marker."""
+    content = []
+    start_reading = False
+    with open(file_path, 'r') as file:
+        for line in file:
+            if "########### MultiConfigPart Running configuration (Not deployable)" in line:
+                start_reading = True
+            if start_reading:
+                content.append(line.strip())
+    return content
+
+def extract_ssl_profiles(content, profile_type):
+    """Extract SSL profile details from the configuration."""
+    regex_start = rf"ltm profile {profile_type} .+?\{{"
+    regex_end = "unclean-shutdown"
+    profiles = []
+    
+    capturing = False
+    current_profile = {}
+    
+    for line in content:
+        if re.match(regex_start, line):
+            capturing = True
+            profile_name = line.split()[3].strip('{')
+            current_profile = {'name': profile_name, 'ciphers': '', 'options': ''}
+        
+        if capturing:
+            if line.startswith('ciphers'):
+                current_profile['ciphers'] = line.split()[1]
+            if line.startswith('options {'):
+                options = line.split('{')[1].strip('} ')
+                current_profile['options'] = options
+        
+        if regex_end in line and capturing:
+            profiles.append(current_profile)
+            capturing = False
+    
+    return profiles
+
+def extract_virtual_servers(content):
+    """Extract virtual server details and associated SSL profiles."""
+    regex_start = r"ltm virtual .+?\{"
+    virtuals = []
+    
+    capturing = False
+    current_virtual = {'name': '', 'client-ssl': '', 'server-ssl': ''}
+    
+    for line in content:
+        if re.match(regex_start, line):
+            capturing = True
+            virtual_name = line.split()[2].strip('{')
+            current_virtual['name'] = virtual_name
+        
+        if capturing:
+            if 'context clientside' in line:
+                previous_line = content[content.index(line) - 1]
+                if previous_line.strip().endswith('{'):
+                    profile_name = previous_line.split()[0]
+                    current_virtual['client-ssl'] = profile_name
+            if 'context serverside' in line:
+                previous_line = content[content.index(line) - 1]
+                if previous_line.strip().endswith('{'):
+                    profile_name = previous_line.split()[0]
+                    current_virtual['server-ssl'] = profile_name
+        
+        if 'vs-index' in line and capturing:
+            virtuals.append(current_virtual)
+            capturing = False
+            current_virtual = {'name': '', 'client-ssl': '', 'server-ssl': ''}
+    
+    return virtuals
+
+def create_excel(profiles, virtual_servers):
+    """Create an Excel file with the extracted data."""
+    # Creating DataFrame for Client-SSL Profiles
+    client_profiles_data = []
+    for virtual in virtual_servers:
+        for profile in profiles:
+            if profile['name'] == virtual['client-ssl']:
+                client_profiles_data.append({
+                    'Virtual Server Name': virtual['name'],
+                    'Client-SSL Profiles Name': profile['name'],
+                    'Ciphers Name': profile['ciphers'],
+                    'Options': profile['options']
+                })
+    
+    df_clients = pd.DataFrame(client_profiles_data)
+    writer = pd.ExcelWriter('SSL_Profiles.xlsx', engine='xlsxwriter')
+    df_clients.to_excel(writer, sheet_name='Used Client-SSL Profiles', index=False)
+    writer.save()
+
+# Paths and example usage
+config_path = 'config.txt'
+
+# Reading and processing configuration data
+config_data = read_config(config_path)
+client_profiles = extract_ssl_profiles(config_data, 'client-ssl')
+server_profiles = extract_ssl_profiles(config_data, 'server-ssl')
+virtual_servers = extract_virtual_servers(config_data)
+
+# Creating Excel
+create_excel(client_profiles, virtual_servers)
+
+# The above code blocks are commented out to prevent execution here.
+# They would be uncommented and organized appropriately for execution in a Python environment after reviewing.
