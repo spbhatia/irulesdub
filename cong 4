@@ -1,0 +1,82 @@
+import re
+import pandas as pd
+
+def read_config(content):
+    """ Extract relevant content after specified header. """
+    start_reading = False
+    captured_content = []
+    for line in content:
+        if "########### MultiConfigPart Running configuration (Not deployable)" in line:
+            start_reading = True
+        if start_reading:
+            captured_content.append(line.strip())
+    return captured_content
+
+def extract_ssl_profiles(content, profile_type):
+    """ Extract SSL profiles of given type. """
+    pattern = re.compile(rf"ltm profile {profile_type} \S+ \{{")
+    profiles = []
+    current_profile = {}
+    capture = False
+
+    for line in content:
+        if pattern.match(line):
+            profile_name = line.split()[3].strip('{')
+            current_profile = {'name': profile_name, 'ciphers': '', 'options': ''}
+            capture = True
+        elif "unclean-shutdown" in line and capture:
+            profiles.append(current_profile)
+            capture = False
+        elif capture:
+            if line.startswith('ciphers'):
+                current_profile['ciphers'] = line.split()[1]
+            if line.startswith('options {'):
+                current_profile['options'] = line.split('{')[1].strip('} ')
+
+    return profiles
+
+def extract_virtual_servers(content):
+    """ Extract virtual server details including SSL profiles. """
+    pattern = re.compile(r"ltm virtual \S+ \{{")
+    virtual_servers = []
+    current_virtual = {}
+    capture = False
+
+    for line in content:
+        if pattern.match(line):
+            virtual_name = line.split()[2].strip('{')
+            current_virtual = {'name': virtual_name, 'client-ssl': '', 'server-ssl': ''}
+            capture = True
+        elif "vs-index" in line and capture:
+            virtual_servers.append(current_virtual)
+            capture = False
+        elif capture:
+            if 'context clientside' in line:
+                current_virtual['client-ssl'] = content[content.index(line) - 1].split()[0]
+            if 'context serverside' in line:
+                current_virtual['server-ssl'] = content[content.index(line) - 1].split()[0]
+
+    return virtual_servers
+
+def create_excel(client_profiles, virtual_servers):
+    """ Create an Excel file with extracted data. """
+    data = []
+    for vs in virtual_servers:
+        client_profile = next((cp for cp in client_profiles if cp['name'] == vs['client-ssl']), None)
+        if client_profile:
+            data.append({
+                'Virtual Server Name': vs['name'],
+                'Client-SSL Profiles Name': client_profile['name'],
+                'Ciphers Name': client_profile['ciphers'],
+                'Options': client_profile['options']
+            })
+
+    df = pd.DataFrame(data)
+    df.to_excel('SSL_Profiles.xlsx', index=False, engine='openpyxl')
+
+# Example usage
+content = read_file_as_lines('config.txt')  # Assuming you have a function to read the file lines
+processed_content = read_config(content)
+client_profiles = extract_ssl_profiles(processed_content, 'client-ssl')
+virtual_servers = extract_virtual_servers(processed_content)
+create_excel(client_profiles, virtual_servers)
