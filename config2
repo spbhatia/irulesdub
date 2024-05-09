@@ -48,7 +48,7 @@ def extract_ssl_profiles(content, profile_type):
     return profiles
 
 def extract_virtual_servers(content):
-    """Extract virtual server details and associated SSL profiles."""
+    """Extract virtual server details and associated SSL profiles more accurately."""
     regex_start = r"ltm virtual .+?\{"
     virtuals = []
     
@@ -59,29 +59,27 @@ def extract_virtual_servers(content):
         if re.match(regex_start, line):
             capturing = True
             virtual_name = line.split()[2].strip('{')
-            current_virtual['name'] = virtual_name
+            current_virtual = {'name': virtual_name, 'client-ssl': [], 'server-ssl': []}
         
         if capturing:
             if 'context clientside' in line:
                 previous_line = content[content.index(line) - 1]
                 if previous_line.strip().endswith('{'):
                     profile_name = previous_line.split()[0]
-                    current_virtual['client-ssl'] = profile_name
+                    if profile_name not in current_virtual['client-ssl']:
+                        current_virtual['client-ssl'].append(profile_name)
             if 'context serverside' in line:
                 previous_line = content[content.index(line) - 1]
                 if previous_line.strip().endswith('{'):
                     profile_name = previous_line.split()[0]
-                    current_virtual['server-ssl'] = profile_name
+                    if profile_name not in current_virtual['server-ssl']:
+                        current_virtual['server-ssl'].append(profile_name)
         
         if 'vs-index' in line and capturing:
             virtuals.append(current_virtual)
             capturing = False
-            current_virtual = {'name': '', 'client-ssl': '', 'server-ssl': ''}
     
     return virtuals
-
-
-import pandas as pd
 
 def create_excel(profiles, virtual_servers):
     """Create an Excel file with the extracted data using openpyxl."""
