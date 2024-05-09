@@ -1,0 +1,26 @@
+def extract_virtual_servers(content):
+    """Extract virtual server details including SSL profiles, ensuring each block is handled correctly."""
+    pattern_start = re.compile(r"ltm virtual \S+ \{")
+    pattern_end = "vs-index"
+    virtual_servers = []
+    current_virtual = {}
+    capture = False
+
+    for line in content:
+        if pattern_start.match(line):
+            virtual_name = line.split()[2].strip('{')
+            current_virtual = {'name': virtual_name, 'client-ssl': '', 'server-ssl': ''}
+            capture = True
+        elif pattern_end in line and capture:
+            virtual_servers.append(current_virtual)
+            capture = False  # Reset at the end of each virtual server block
+        elif capture:
+            if 'context clientside' in line:
+                # Ensure that this line is captured only within the bounds of the current virtual server block
+                prev_line = content[content.index(line) - 1]
+                current_virtual['client-ssl'] = prev_line.split()[0]
+            if 'context serverside' in line:
+                prev_line = content[content.index(line) - 1]
+                current_virtual['server-ssl'] = prev_line.split()[0]
+
+    return virtual_servers
