@@ -1,0 +1,59 @@
+def extract_virtual_servers(content):
+    """Extract virtual server details and associated SSL profiles more accurately, with debug outputs."""
+    regex_start = r"ltm virtual .+?\{"
+    virtuals = []
+    
+    capturing = False
+    current_virtual = {'name': '', 'client-ssl': [], 'server-ssl': []}
+    
+    for line in content:
+        if re.match(regex_start, line):
+            capturing = True
+            virtual_name = line.split()[2].strip('{')
+            current_virtual = {'name': virtual_name, 'client-ssl': [], 'server-ssl': []}
+            print(f"Capturing started for virtual server: {virtual_name}")
+        
+        if capturing:
+            if 'context clientside' in line:
+                previous_line = content[content.index(line) - 1]
+                if previous_line.strip().endswith('{'):
+                    profile_name = previous_line.split()[0]
+                    current_virtual['client-ssl'].append(profile_name)
+                    print(f"Added client-ssl profile {profile_name} to {current_virtual['name']}")
+            if 'context serverside' in line:
+                previous_line = content[content.index(line) - 1]
+                if previous_line.strip().endswith('{'):
+                    profile_name = previous_line.split()[0]
+                    current_virtual['server-ssl'].append(profile_name)
+                    print(f"Added server-ssl profile {profile_name} to {current_virtual['name']}")
+        
+        if 'vs-index' in line and capturing:
+            virtuals.append(current_virtual)
+            print(f"Finished capturing for virtual server: {current_virtual['name']}")
+            capturing = False
+    
+    return virtuals
+
+def create_excel(profiles, virtual_servers):
+    """Create an Excel file with the extracted data using openpyxl, with debug outputs."""
+    client_profiles_data = []
+    for virtual in virtual_servers:
+        for profile in profiles:
+            if profile['name'] in virtual['client-ssl']:
+                client_profiles_data.append({
+                    'Virtual Server Name': virtual['name'],
+                    'Client-SSL Profiles Name': profile['name'],
+                    'Ciphers Name': profile['ciphers'],
+                    'Options': profile['options']
+                })
+                print(f"Preparing data for Excel: {client_profiles_data[-1]}")
+    
+    if client_profiles_data:
+        df_clients = pd.DataFrame(client_profiles_data)
+        with pd.ExcelWriter('SSL_Profiles.xlsx', engine='openpyxl') as writer:
+            df_clients.to_excel(writer, sheet_name='Used Client-SSL Profiles', index=False)
+            print("Excel file written successfully.")
+    else:
+        print("No data collected to write to Excel.")
+
+# Implement the above code with your actual data and observe the printed outputs to determine where the issue might be.
