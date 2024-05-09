@@ -1,0 +1,46 @@
+def find_unused_profiles(all_profiles, used_profiles):
+    """Identify profiles that are not used in any virtual server."""
+    used_names = {prof['name'] for prof in used_profiles}
+    unused_profiles = [prof for prof in all_profiles if prof['name'] not in used_names]
+    return unused_profiles
+
+def create_excel(client_profiles, server_profiles, virtual_servers):
+    """Create an Excel file with extracted data, including unused SSL profiles."""
+    client_data = []
+    server_data = []
+    used_client_profiles = []
+    used_server_profiles = []
+
+    # Prepare data and collect used profiles
+    for vs in virtual_servers:
+        if vs['client-ssl']:
+            client_profile = next((cp for cp in client_profiles if cp['name'] == vs['client-ssl']), None)
+            if client_profile:
+                client_data.append({
+                    'Virtual Server Name': vs['name'],
+                    'Client-SSL Profiles Name': client_profile['name'],
+                    'Ciphers Name': client_profile['ciphers'],
+                    'Options': client_profile['options']
+                })
+                used_client_profiles.append(client_profile)
+        if vs['server-ssl']:
+            server_profile = next((sp for sp in server_profiles if sp['name'] == vs['server-ssl']), None)
+            if server_profile:
+                server_data.append({
+                    'Virtual Server Name': vs['name'],
+                    'Server-SSL Profiles Name': server_profile['name'],
+                    'Ciphers Name': server_profile['ciphers'],
+                    'Options': server_profile['options']
+                })
+                used_server_profiles.append(server_profile)
+
+    # Identify unused profiles
+    unused_clients = find_unused_profiles(client_profiles, used_client_profiles)
+    unused_servers = find_unused_profiles(server_profiles, used_server_profiles)
+
+    # Write to Excel using pandas ExcelWriter
+    with pd.ExcelWriter('SSL_Profiles.xlsx', engine='openpyxl') as writer:
+        pd.DataFrame(client_data).to_excel(writer, sheet_name='Used Client-SSL Profiles', index=False)
+        pd.DataFrame(server_data).to_excel(writer, sheet_name='Used Server-SSL Profiles', index=False)
+        pd.DataFrame(unused_clients).to_excel(writer, sheet_name='Unused Client-SSL Profiles', index=False)
+        pd.DataFrame(unused_servers).to_excel(writer, sheet_name='Unused Server-SSL Profiles', index=False)
