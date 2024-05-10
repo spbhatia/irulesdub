@@ -27,3 +27,27 @@ def create_excel(client_profiles, server_profiles, virtual_servers, monitor_ssl_
         pd.DataFrame(server_data).to_excel(writer, sheet_name='Used Server-SSL Profiles', index=False)
         pd.DataFrame(unused_clients).to_excel(writer, sheet_name='Unused Client-SSL Profiles', index=False)
         pd.DataFrame(unused_servers).to_excel(writer, sheet_name='Unused Server-SSL Profiles', index=False)
+
+
+))###########
+
+def find_unused_client_profiles(all_profiles, used_profiles):
+    """Identify profiles that are not used in any virtual server, including cipher remark."""
+    # Ignore default Client-ssl profiles
+    defaultclientsssl = (
+        'clientssl', 'clientssl-insecure-compatible', 'clientssl-quic', 
+        'clientssl-secure', 'crsptisession-default-clientssl', 'wom-default-clientssl'
+    )
+
+    # Gather used profile names to exclude from unused list
+    used_names = {prof['name'] for prof in used_profiles}
+
+    # Prepare unused profiles list with cipher remarks
+    unused_profiles = []
+    for prof in all_profiles:
+        if prof['name'] not in used_names and prof['name'] not in defaultclientsssl:
+            cipher_remark = validate_cipher_and_options(prof['ciphers'], prof['options'])
+            prof['Cipher Remark'] = cipher_remark  # Add cipher remark to each unused profile
+            unused_profiles.append(prof)
+
+    return unused_profiles
