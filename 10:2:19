@@ -1,0 +1,44 @@
+def extract_monitor_ssl_profiles(content):
+    """Extract SSL profile names used in monitor blocks."""
+    monitor_profiles = set()
+    pattern_start = re.compile(r"ltm monitor .+? \{")
+    in_monitor_block = False
+    for line in content:
+        if pattern_start.match(line):
+            in_monitor_block = True
+        elif in_monitor_block and 'username' in line:
+            in_monitor_block = False
+        elif in_monitor_block and 'ssl-profile' in line:
+            profile_name = line.split('/')[-1].strip()
+            monitor_profiles.add(profile_name)
+    return monitor_profiles
+
+def find_unused_server_profiles(server_profiles, used_server_profiles, monitor_profiles):
+    """Identify server-ssl profiles that are not used in any virtual server or monitor block."""
+    used_names = {prof['name'] for prof in used_server_profiles} | monitor_profiles
+    unused_profiles = [prof for prof in server_profiles if prof['name'] not in used_names]
+    return unused_profiles
+
+def create_excel(client_profiles, server_profiles, virtual_servers, monitor_ssl_profiles):
+    """Updated Excel export to account for monitor block SSL profiles."""
+    # Existing logic to prepare client_data and server_data
+    # ...
+
+    # Identify unused profiles considering monitor blocks
+    unused_servers = find_unused_server_profiles(server_profiles, used_server_profiles, monitor_ssl_profiles)
+
+    # Write to Excel using pandas ExcelWriter
+    with pd.ExcelWriter('SSL_Profiles.xlsx', engine='openpyxl') as writer:
+        # Existing logic to write used profiles
+        # ...
+
+        pd.DataFrame(unused_servers).to_excel(writer, sheet_name='Unused Server-SSL Profiles', index=False)
+
+content = read_file_as_lines('config.txt')
+processed_content = read_config(content)
+client_profiles = extract_ssl_profiles(processed_content, 'client-ssl')
+server_profiles = extract_ssl_profiles(processed_content, 'server-ssl')
+virtual_servers = extract_virtual_servers(processed_content)
+monitor_ssl_profiles = extract_monitor_ssl_profiles(processed_content)
+
+create_excel(client_profiles, server_profiles, virtual_servers, monitor_ssl_profiles)
