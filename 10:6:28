@@ -1,0 +1,40 @@
+valid_ciphers = ["DEFAULT", "HIGH", "MEDIUM", "LOW"]  # Example valid cipher suites
+
+def validate_cipher_and_options(cipher_name, options):
+    """Check if the cipher suite and options are considered valid."""
+    # Check if the cipher is valid and options contain 'no-dtlsv1.2'
+    if cipher_name in valid_ciphers and 'no-dtlsv1.2' in options:
+        return "Cipher Suits is valid"
+    else:
+        return "Cipher Suits is not valid"
+
+
+def create_excel(client_profiles, server_profiles, virtual_servers, monitor_ssl_profiles):
+    """Create an Excel file with extracted data, including updated cipher validation."""
+    client_data = []
+    server_data = []
+
+    # Prepare data and include updated cipher and options validation
+    for vs in virtual_servers:
+        client_profile_name = vs.get('client-ssl')
+        if client_profile_name:
+            client_profile = next((cp for cp in client_profiles if cp['name'] == client_profile_name), None)
+            if client_profile:
+                cipher_remark = validate_cipher_and_options(client_profile['ciphers'], client_profile['options'])
+                client_data.append({
+                    'Virtual Server Name': vs['name'],
+                    'Client-SSL Profiles Name': client_profile['name'],
+                    'Ciphers Name': client_profile['ciphers'],
+                    'Options': client_profile['options'],
+                    'Cipher Remark': cipher_remark
+                })
+
+        server_profile_name = vs.get('server-ssl')
+        if server_profile_name:
+            server_profile = next((sp for sp in server_profiles if sp['name'] == server_profile_name), None)
+            if server_profile:
+                cipher_remark = validate_cipher_and_options(server_profile['ciphers'], server_profile['options'])
+                server_data.append({
+                    'Virtual Server Name': vs['name'],
+                    'Server-SSL Profiles Name': server_profile['name'],
+                    'Ciphers Name': server_profile['c
