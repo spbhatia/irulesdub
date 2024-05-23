@@ -1,30 +1,38 @@
 #!/bin/bash
 
+# Fetch partitions from tmsh command output
 partitions=$(tmsh list auth partition | awk '/^auth/ {print $3}')
 
 echo -e "Discovering offline pools in BIGIP\n"
 
+# Iterate over each partition
 for part in $partitions; do
-    echo "Offline pools in Partition: $part"
-    pools=$(tmsh list ltm pool /$part/ | awk '/^ltm pool/ {print $3}')
+  echo "Offline pools in Partition: $part"
 
-    for pool in $pools; do
-        pool_availability=$(tmsh show ltm pool $pool members field-fmt | awk '/status.availability-state/ {print $2}')
-        if [[ "$pool_availability" == "offline" ]]; then
-            echo -e "Pool $pool:"
-            tmsh show ltm pool $pool field-fmt members | awk '
-                /node-name/ {mem=$2}
-                /addr/ {mbrAddr=$2}
-                /port/ {mbrPort=$2}
-                /^ {12}status.availability-state/ {avStat=$2}
-                /^ {12}status.enabled-state/ {enstate=$2}
-                /^ {12}pool-name/ {pname=$2}
-                /status.status-reason/ {reason=""; getline; reason=$0}
-                /^{8}/ {print "Member: " mem, "Address: " mbrAddr, "Port: " mbrPort, "Availability: " avStat, "Enabled: " enstate, "Reason: " reason}'
+  # Fetch pools for the current partition
+  pools=$(tmsh list ltm pool /$part/ | awk '/^ltm pool/ {print $3}')
+
+  # Iterate over each pool
+  for pool in $pools; do
+    # Check pool members and availability status
+    if ! pool_details=$(tmsh show ltm pool $pool members field-fmt); then
+      printf "Failed to get details for pool %s\n" "$pool" >&2
+      continue
+    fi
+
+    # Check if any member is offline and capture downtime reason
+    while read -r line; do
+      if [[ $line =~ status.availability-state\ offline ]]; then
+        if [[ $pool_details =~ status.status-reason ]]; then
+          downtime_reason=$(printf "%s\n" "$pool_details" | awk '/status.status-reason/ {print $2, $3, $4, $5, $6}')
+          printf "Pool %s: %s\n" "$pool" "$downtime_reason"
+        else
+          printf "Pool %s: offline with no specified reason\n" "$pool"
         fi
-    done
-
-    echo -e
+      fi
+    done <<< "$pool_details"
+  done
+  echo -e
 done
 
 echo -e "Done!"
