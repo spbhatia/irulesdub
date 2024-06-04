@@ -1,0 +1,46 @@
+import boto3
+import datetime
+
+regions = ['ap-east-1', 'us-east-1', 'eu-west-1']
+delete_date = datetime.datetime.now().date() - datetime.timedelta(days=60)
+
+def handler(event, context):
+
+    # Function to calculate the age of AMI
+    def days_old(date):
+        date_obj = datetime.datetime.strptime(date, '%Y-%m-%dT%H:%M:%S.%fZ')
+        diff = datetime.datetime.now() - date_obj
+        return diff.days
+
+    for region in regions:
+        ec2 = boto3.client('ec2', region_name=region)
+        amis = ec2.describe_images(Filters=[
+            {
+                'Name': 'name',
+                'Values': ['nginxgw-lb*']
+            }
+        ])['Images']
+
+        for ami in amis:
+            create_date = ami['CreationDate']
+            ami_id = ami['ImageId']
+            age_in_days = days_old(create_date)
+
+            if age_in_days > (datetime.datetime.now().date() - delete_date).days:
+                print(f"Deleting AMI: {ami_id} - Created on {create_date} in region {region}")
+                # Deregister the AMI
+                ec2.deregister_image(ImageId=ami_id)
+                # Delete associated snapshots
+                for device in ami['BlockDeviceMappings']:
+                    if 'Ebs' in device:
+                        snapshot_id = device['Ebs']['SnapshotId']
+                        ec2.delete_snapshot(SnapshotId=snapshot_id)
+
+    return {
+        'statusCode': 200,
+        'body': 'AMIs and their snapshots deleted successfully'
+    }
+
+# For local testing purposes
+if __name__ == "__main__":
+    handler({}, {})
