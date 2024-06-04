@@ -1,0 +1,193 @@
+Deploying this script using Terraform involves several steps. You will need to create an AWS Lambda function, set up the necessary IAM roles and policies, and create an AWS CloudWatch Event rule to trigger the Lambda function. Here's an example of how you can achieve this:
+
+### Step 1: Create the Lambda Function Script
+
+Save your Python script as `ami_cleanup.py`.
+
+### Step 2: Create the Terraform Configuration
+
+Here’s a basic example of how to set up the Lambda function and CloudWatch Event rule using Terraform:
+
+#### 1. `main.tf`
+
+```hcl
+provider "aws" {
+  region = "us-east-1"
+}
+
+# IAM Role for Lambda
+resource "aws_iam_role" "lambda_role" {
+  name = "lambda_ami_cleanup_role"
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+  ]
+}
+EOF
+}
+
+# IAM Policy for Lambda
+resource "aws_iam_role_policy" "lambda_policy" {
+  name = "lambda_ami_cleanup_policy"
+  role = aws_iam_role.lambda_role.id
+
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeImages",
+        "ec2:DeregisterImage",
+        "ec2:DeleteSnapshot"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:*:*:*"
+    }
+  ]
+}
+EOF
+}
+
+# Lambda Function
+resource "aws_lambda_function" "ami_cleanup" {
+  filename         = "ami_cleanup.zip"
+  function_name    = "ami_cleanup_function"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "ami_cleanup.handler"
+  runtime          = "python3.8"
+  source_code_hash = filebase64sha256("ami_cleanup.zip")
+
+  environment {
+    variables = {
+      REGIONS = "ap-east-1,us-east-1,eu-west-1"
+    }
+  }
+}
+
+# CloudWatch Event Rule
+resource "aws_cloudwatch_event_rule" "ami_cleanup_rule" {
+  name        = "ami_cleanup_rule"
+  description = "Run AMI cleanup Lambda function every day"
+  schedule_expression = "rate(1 day)"
+}
+
+# CloudWatch Event Target
+resource "aws_cloudwatch_event_target" "ami_cleanup_target" {
+  rule = aws_cloudwatch_event_rule.ami_cleanup_rule.name
+  target_id = "ami_cleanup_target"
+  arn = aws_lambda_function.ami_cleanup.arn
+}
+
+# Lambda Permission to Allow CloudWatch to Invoke
+resource
+
+```hcl
+resource "aws_lambda_permission" "allow_cloudwatch" {
+  statement_id  = "AllowExecutionFromCloudWatch"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ami_cleanup.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.ami_cleanup_rule.arn
+}
+```
+
+### Step 3: Create a ZIP File of Your Lambda Function
+
+Ensure you have your `ami_cleanup.py` script in the same directory as your `main.tf` file. Then create a ZIP file for the Lambda deployment:
+
+```sh
+zip ami_cleanup.zip ami_cleanup.py
+```
+
+### Step 4: Deploy with Terraform
+
+1. Initialize your Terraform working directory:
+
+    ```sh
+    terraform init
+    ```
+
+2. Review the execution plan:
+
+    ```sh
+    terraform plan
+    ```
+
+3. Apply the configuration:
+
+    ```sh
+    terraform apply
+    ```
+
+### Step 5: Update Your Python Script
+
+Ensure your Python script reads the regions from the environment variable set in the Lambda function configuration. Update your `ami_cleanup.py` script as follows:
+
+```python
+import boto3
+import datetime
+import os
+
+delete_date = datetime.datetime.now().date() - datetime.timedelta(days=60)
+regions = os.environ['REGIONS'].split(',')
+
+def handler(event, context):
+
+    # Function to calculate the age of AMI
+    def days_old(date):
+        date_obj = datetime.datetime.strptime(date, '%Y-%m-%dT%H:%M:%S.%fZ')
+        diff = datetime.datetime.now() - date_obj
+        return diff.days
+
+    for region in regions:
+        ec2 = boto3.client('ec2', region_name=region)
+        amis = ec2.describe_images(Filters=[
+            {
+                'Name': 'name',
+                'Values': ['nginxgw-lb*']
+            }
+        ])['Images']
+
+        for ami in amis:
+            create_date = ami['CreationDate']
+            ami_id = ami['ImageId']
+            age_in_days = days_old(create_date)
+
+            if age_in_days > (datetime.datetime.now().date() - delete_date).days:
+                print(f"Deleting AMI: {ami_id} - Created on {create_date} in region {region}")
+                # Deregister the AMI
+                ec2.deregister_image(ImageId=ami_id)
+                # Delete associated snapshots
+                for device in ami['BlockDeviceMappings']:
+                    if 'Ebs' in device:
+                        snapshot_id = device['Ebs']['SnapshotId']
+                        ec2.delete_snapshot(SnapshotId=snapshot_id)
+
+    return {
+        'statusCode': 200,
+        'body': 'AMIs and their snapshots deleted successfully'
+    }
+```
+
+### Summary
+
+With this setup, your Lambda function will be triggered every day, checking and cleaning up old AMIs and their snapshots across the specified regions. Make sure to test this setup in your development environment before deploying to production.
