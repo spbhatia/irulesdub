@@ -1,0 +1,58 @@
+import json
+import boto3
+import os
+import logging
+
+def lambda_handler(event, context):
+    # Configure logging
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    
+    # Specific AWS account ID from environment variables
+    account_id = os.getenv('ACCOUNT_ID')
+    
+    try:
+        # Create an EC2 client in the specified region
+        ec2_client = boto3.client('ec2', region_name='eu-west-1')
+        
+        # Fetch the list of all AMI images owned by the specified account
+        response = ec2_client.describe_images(
+            Owners=[account_id],
+            Filters=[
+                {'Name': 'state', 'Values': ['available']},  # Only fetch available AMIs
+            ]
+        )
+        
+        # Extract and sort the images by creation date
+        ami_images = sorted(response['Images'], key=lambda x: x['CreationDate'])
+        
+        # Exclude the last 4 AMI images
+        images_to_delete = ami_images[:-4]
+        
+        for image in images_to_delete:
+            image_id = image['ImageId']
+            snapshot_ids = [block['Ebs']['SnapshotId'] for block in image['BlockDeviceMappings'] if 'Ebs' in block]
+            
+            # Deregister the AMI image
+            ec2_client.deregister_image(ImageId=image_id)
+            logger.info(f"Deregistered AMI: {image_id}")
+            
+            # Delete the associated snapshots
+            for snapshot_id in snapshot_ids:
+                ec2_client.delete_snapshot(SnapshotId=snapshot_id)
+                logger.info(f"Deleted snapshot: {snapshot_id}")
+        
+        # Return the list of deregistered AMI images and deleted snapshots
+        deregistered_amis = [{'ImageId': image['ImageId'], 'Snapshots': [block['Ebs']['SnapshotId'] for block in image['BlockDeviceMappings'] if 'Ebs' in block]} for image in images_to_delete]
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'DeregisteredAMIs': deregistered_amis})
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing AMI images: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': str(e)})
+        }
