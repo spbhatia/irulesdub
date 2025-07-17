@@ -5,18 +5,18 @@ Sub RunHealthCheck()
     Dim server, path, port, fqdn, proto, url, hostHeader, curlCmd As String
     Dim result As String
     Dim shellOutput As String
-    Dim httpFallback, getMethodCmd As String
+    Dim getMethodCmd As String
     Dim tempFile As String
     
-    ' Find last used row
-    lastRow = Cells(Rows.Count, 1).End(xlUp).Row
+    ' Determine last used row in Column G (Server Name)
+    lastRow = Cells(Rows.Count, "G").End(xlUp).Row
 
-    For i = 2 To lastRow
-        server = Cells(i, 1).Value
-        path = Cells(i, 2).Value
-        port = Cells(i, 3).Value
-        fqdn = Cells(i, 4).Value
-        proto = Cells(i, 5).Value
+    For i = 6 To lastRow
+        server = Cells(i, "G").Value
+        path = Cells(i, "M").Value
+        port = Cells(i, "I").Value
+        fqdn = Cells(i, "E").Value
+        proto = Cells(i, "K").Value
         url = proto & "://" & server & ":" & port & "/" & path
         hostHeader = "-H ""Host: " & fqdn & """"
         tempFile = Environ("TEMP") & "\curl_output.txt"
@@ -74,7 +74,7 @@ Sub RunHealthCheck()
             result = "Health check failed: Unknown response"
         End If
         
-        Cells(i, 6).Value = result
+        Cells(i, "O").Value = result
     Next i
 
     MsgBox "Health Check Completed!"
