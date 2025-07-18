@@ -41,7 +41,7 @@ Function CheckTCP(server As String, port As String) As String
     Dim cmd As String
     Dim output As String
     
-    cmd = "curl -v telnet://" & server & ":" & port & " 2>&1"
+    cmd = "curl -v --max-time 0.1 telnet://" & server & ":" & port & " 2>&1"
     output = ExecCurlFull(cmd)
     
     If InStr(output, "Connected to " & server & " port " & port) > 0 Then
@@ -67,45 +67,38 @@ Function CheckHTTP(server As String, port As String, path As String, _
     url = proto & "://" & server & ":" & port & "/" & path
     hostHeader = " -H ""Host: " & fqdn & """"
     
-    ' --- HEAD with Host header ---
-    cmd = "curl -N -I -k --connect-timeout 10 """ & url & """ " & hostHeader & " 2>&1"
+    ' HEAD with Host header
+    cmd = "curl -N -I -k --connect-timeout 10 --max-time 10 """ & url & """ " & hostHeader & " 2>&1"
     output = ExecCurlFull(cmd)
     
     If InStr(output, "200") > 0 Then
         CheckHTTP = "Health check status is Up"
-        
     ElseIf InStr(output, "401") > 0 Then
         CheckHTTP = "Authentication is on preventing server Health check"
-        
     ElseIf InStr(output, "404") > 0 Then
-        ' --- Retry HEAD without Host header ---
-        cmd = "curl -N -I -k --connect-timeout 10 """ & url & """ 2>&1"
+        ' Retry HEAD without Host header
+        cmd = "curl -N -I -k --connect-timeout 10 --max-time 10 """ & url & """ 2>&1"
         output = ExecCurlFull(cmd)
-        
         If InStr(output, "200") > 0 Then
             CheckHTTP = "Health check status is Up"
         Else
             CheckHTTP = "Health check status is Down (404)"
         End If
-        
     ElseIf InStr(output, "405") > 0 Then
-        ' --- Try GET with Host header ---
-        cmd = "curl -N -i -k --connect-timeout 10 """ & url & """ " & hostHeader & " 2>&1"
+        ' Try GET with Host header
+        cmd = "curl -N -i -k --connect-timeout 10 --max-time 10 """ & url & """ " & hostHeader & " 2>&1"
         output = ExecCurlFull(cmd)
-        
         If InStr(output, "200") > 0 Then
             CheckHTTP = "Http HEAD method is not permitted, GET method is permitted"
         Else
             CheckHTTP = "Health check status is Down"
         End If
-        
     ElseIf InStr(output, "(7)") > 0 Or InStr(output, "(35)") > 0 Or InStr(output, "(60)") > 0 Then
-        ' --- Try HTTP instead of HTTPS ---
+        ' Try HTTP instead of HTTPS
         If proto = "HTTPS" Then
             url = "http://" & server & ":" & port & "/" & path
-            cmd = "curl -N -I -k --connect-timeout 10 """ & url & """ " & hostHeader & " 2>&1"
+            cmd = "curl -N -I -k --connect-timeout 10 --max-time 10 """ & url & """ " & hostHeader & " 2>&1"
             output = ExecCurlFull(cmd)
-            
             If InStr(output, "200") > 0 Then
                 CheckHTTP = "Health check status is down on https, Up on http"
             Else
@@ -114,11 +107,9 @@ Function CheckHTTP(server As String, port As String, path As String, _
         Else
             CheckHTTP = "Health check status is Down"
         End If
-        
     ElseIf InStr(output, "Hostname was NOT found") > 0 Or _
            InStr(output, "Could not resolve host") > 0 Then
         CheckHTTP = "FQDN cannot be resolved"
-        
     Else
         CheckHTTP = "Health check status indeterminate"
     End If
@@ -130,7 +121,7 @@ Function ExecCurlFull(cmd As String) As String
     
     On Error Resume Next
     Set sh = CreateObject("WScript.Shell")
-    Set proc = sh.Exec(cmd)
+    Set proc = sh.Exec("cmd /c " & cmd)
     Do While proc.Status = 0
         DoEvents
     Loop
