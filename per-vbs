@@ -1,129 +1,112 @@
+Option Explicit
+
 Sub RunHealthCheck()
     Dim lastRow As Long
     Dim i As Long
     
     Dim server As String
-    Dim path   As String
-    Dim port   As String
-    Dim fqdn   As String
-    Dim proto  As String
-    
+    Dim port As String
+    Dim path As String
+    Dim fqdn As String
+    Dim proto As String
     Dim result As String
-    Dim tempFile As String
     
-    ' ----- Find last populated row in column G -----
     lastRow = Cells(Rows.Count, "G").End(xlUp).Row
     
     For i = 6 To lastRow
         server = Trim(Cells(i, "G").Value)
-        path   = Trim(Cells(i, "M").Value)
-        port   = Trim(Cells(i, "I").Value)
-        fqdn   = Trim(Cells(i, "E").Value)
-        proto  = UCase$(Trim(Cells(i, "K").Value))
+        If server = "" Then GoTo NextRow
         
-        If server = "" Then GoTo NextRow   'skip blanks
+        port = Trim(Cells(i, "I").Value)
+        path = Trim(Cells(i, "M").Value)
+        fqdn = Trim(Cells(i, "E").Value)
+        proto = UCase(Trim(Cells(i, "K").Value))
         
-        tempFile = Environ$("TEMP") & "\curl_output.txt"
-        
-        Select Case proto
-            Case "TCP"
-                result = CheckTCP(server, port, tempFile)
-            Case "HTTP", "HTTPS"
-                result = CheckHTTP(server, path, port, fqdn, proto, tempFile)
-            Case Else
-                result = "Unknown protocol: " & proto
-        End Select
+        If proto = "TCP" Then
+            result = CheckTCP(server, port)
+        ElseIf proto = "HTTP" Or proto = "HTTPS" Then
+            result = CheckHTTP(server, port, path, fqdn, proto)
+        Else
+            result = "Unknown protocol: " & proto
+        End If
         
         Cells(i, "N").Value = result
-        
 NextRow:
     Next i
     
     MsgBox "Health Check Completed!"
 End Sub
 
-Function CheckTCP(server As String, port As String, tempFile As String) As String
-    Dim curlCmd As String
-    Dim shellOutput As String
+Function CheckTCP(server As String, port As String) As String
+    Dim cmd As String
+    Dim output As String
     
-    ' TCP connectivity check using curl telnet
-    curlCmd = "cmd /c curl -v --connect-timeout 5 telnet://" & server & ":" & port & " > """ & tempFile & """ 2>&1"
+    cmd = "curl -v telnet://" & server & ":" & port & " 2>&1"
+    output = ExecCurlFull(cmd)
     
-    Shell curlCmd, vbHide
-    Application.Wait (Now + TimeValue("0:00:03"))
-    
-    shellOutput = ReadFile(tempFile)
-    
-    If InStr(shellOutput, "Connected to") > 0 Then
+    If InStr(output, "Connected to " & server & " port " & port) > 0 Then
         CheckTCP = "TCP Connected"
-    ElseIf InStr(shellOutput, "Connection refused") > 0 Then
+    ElseIf InStr(output, "Connection refused") > 0 Then
         CheckTCP = "TCP Connection refused"
-    ElseIf InStr(shellOutput, "timed out") > 0 Then
+    ElseIf InStr(output, "timed out") > 0 Then
         CheckTCP = "TCP Connection timeout"
+    ElseIf InStr(output, "Could not resolve host") > 0 Then
+        CheckTCP = "TCP Hostname cannot be resolved"
     Else
         CheckTCP = "TCP Connection failed"
     End If
 End Function
 
-Function CheckHTTP(server As String, path As String, port As String, fqdn As String, proto As String, tempFile As String) As String
-    Dim curlCmd As String
-    Dim shellOutput As String
+Function CheckHTTP(server As String, port As String, path As String, _
+                   fqdn As String, proto As String) As String
     Dim url As String
+    Dim cmd As String
+    Dim output As String
     Dim hostHeader As String
     
     url = proto & "://" & server & ":" & port & "/" & path
-    hostHeader = "-H ""Host: " & fqdn & """"
+    hostHeader = " -H ""Host: " & fqdn & """"
     
-    ' HEAD Method with Host Header
-    curlCmd = "cmd /c curl -I -k --connect-timeout 10 """ & url & """ " & hostHeader & " > """ & tempFile & """ 2>&1"
+    ' --- HEAD with Host header ---
+    cmd = "curl -N -I -k --connect-timeout 10 """ & url & """ " & hostHeader & " 2>&1"
+    output = ExecCurlFull(cmd)
     
-    Shell curlCmd, vbHide
-    Application.Wait (Now + TimeValue("0:00:03"))
-    
-    shellOutput = ReadFile(tempFile)
-    
-    If InStr(shellOutput, "200") > 0 Then
+    If InStr(output, "200") > 0 Then
         CheckHTTP = "Health check status is Up"
-    
-    ElseIf InStr(shellOutput, "401") > 0 Then
-        CheckHTTP = "Authentication is on preventing server Health check"
-    
-    ElseIf InStr(shellOutput, "404") > 0 Then
-        ' Try HEAD without Host Header
-        curlCmd = "cmd /c curl -I -k --connect-timeout 10 """ & url & """ > """ & tempFile & """ 2>&1"
-        Shell curlCmd, vbHide
-        Application.Wait (Now + TimeValue("0:00:03"))
-        shellOutput = ReadFile(tempFile)
         
-        If InStr(shellOutput, "200") > 0 Then
+    ElseIf InStr(output, "401") > 0 Then
+        CheckHTTP = "Authentication is on preventing server Health check"
+        
+    ElseIf InStr(output, "404") > 0 Then
+        ' --- Retry HEAD without Host header ---
+        cmd = "curl -N -I -k --connect-timeout 10 """ & url & """ 2>&1"
+        output = ExecCurlFull(cmd)
+        
+        If InStr(output, "200") > 0 Then
             CheckHTTP = "Health check status is Up"
         Else
             CheckHTTP = "Health check status is Down (404)"
         End If
         
-    ElseIf InStr(shellOutput, "405") > 0 Then
-        ' Try GET method
-        curlCmd = "cmd /c curl -i -k --connect-timeout 10 """ & url & """ " & hostHeader & " > """ & tempFile & """ 2>&1"
-        Shell curlCmd, vbHide
-        Application.Wait (Now + TimeValue("0:00:03"))
-        shellOutput = ReadFile(tempFile)
+    ElseIf InStr(output, "405") > 0 Then
+        ' --- Try GET with Host header ---
+        cmd = "curl -N -i -k --connect-timeout 10 """ & url & """ " & hostHeader & " 2>&1"
+        output = ExecCurlFull(cmd)
         
-        If InStr(shellOutput, "200") > 0 Then
+        If InStr(output, "200") > 0 Then
             CheckHTTP = "Http HEAD method is not permitted, GET method is permitted"
         Else
             CheckHTTP = "Health check status is Down"
         End If
-    
-    ElseIf InStr(shellOutput, "(7)") > 0 Or InStr(shellOutput, "(35)") > 0 Or InStr(shellOutput, "(60)") > 0 Then
-        ' Try http instead of https
+        
+    ElseIf InStr(output, "(7)") > 0 Or InStr(output, "(35)") > 0 Or InStr(output, "(60)") > 0 Then
+        ' --- Try HTTP instead of HTTPS ---
         If proto = "HTTPS" Then
             url = "http://" & server & ":" & port & "/" & path
-            curlCmd = "cmd /c curl -I -k --connect-timeout 10 """ & url & """ " & hostHeader & " > """ & tempFile & """ 2>&1"
-            Shell curlCmd, vbHide
-            Application.Wait (Now + TimeValue("0:00:03"))
-            shellOutput = ReadFile(tempFile)
+            cmd = "curl -N -I -k --connect-timeout 10 """ & url & """ " & hostHeader & " 2>&1"
+            output = ExecCurlFull(cmd)
             
-            If InStr(shellOutput, "200") > 0 Then
+            If InStr(output, "200") > 0 Then
                 CheckHTTP = "Health check status is down on https, Up on http"
             Else
                 CheckHTTP = "Health check status is Down (HTTPS errors persist)"
@@ -132,19 +115,32 @@ Function CheckHTTP(server As String, path As String, port As String, fqdn As Str
             CheckHTTP = "Health check status is Down"
         End If
         
+    ElseIf InStr(output, "Hostname was NOT found") > 0 Or _
+           InStr(output, "Could not resolve host") > 0 Then
+        CheckHTTP = "FQDN cannot be resolved"
+        
     Else
         CheckHTTP = "Health check status indeterminate"
     End If
 End Function
 
-Function ReadFile(filePath As String) As String
-    Dim fileNo As Integer
-    Dim fileContent As String
+Function ExecCurlFull(cmd As String) As String
+    Dim sh As Object, proc As Object
+    Dim line As String, output As String
     
     On Error Resume Next
-    fileNo = FreeFile
-    Open filePath For Input As #fileNo
-    fileContent = Input$(LOF(fileNo), fileNo)
-    Close #fileNo
-    ReadFile = fileContent
+    Set sh = CreateObject("WScript.Shell")
+    Set proc = sh.Exec(cmd)
+    Do While proc.Status = 0
+        DoEvents
+    Loop
+    Do While Not proc.StdOut.AtEndOfStream
+        line = proc.StdOut.ReadLine
+        output = output & line & vbCrLf
+    Loop
+    Do While Not proc.StdErr.AtEndOfStream
+        line = proc.StdErr.ReadLine
+        output = output & line & vbCrLf
+    Loop
+    ExecCurlFull = output
 End Function
