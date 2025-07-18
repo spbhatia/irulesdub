@@ -1,37 +1,39 @@
 Sub RunHealthCheck()
     Dim lastRow As Long
     Dim i As Long
-    Dim server, path, port, fqdn, proto As String
+    
+    Dim server As String
+    Dim path   As String
+    Dim port   As String
+    Dim fqdn   As String
+    Dim proto  As String
+    
     Dim result As String
-    Dim shellOutput As String
-    Dim curlCmd As String
     Dim tempFile As String
     
-    ' Determine last used row in Column G (Server Name)
+    ' ----- Find last populated row in column G -----
     lastRow = Cells(Rows.Count, "G").End(xlUp).Row
     
     For i = 6 To lastRow
-        server = Cells(i, "G").Value
-        path = Cells(i, "M").Value
-        port = Cells(i, "I").Value
-        fqdn = Cells(i, "E").Value
-        proto = UCase(Trim(Cells(i, "K").Value))
+        server = Trim(Cells(i, "G").Value)
+        path   = Trim(Cells(i, "M").Value)
+        port   = Trim(Cells(i, "I").Value)
+        fqdn   = Trim(Cells(i, "E").Value)
+        proto  = UCase$(Trim(Cells(i, "K").Value))
         
-        ' Skip empty rows
-        If server = "" Then GoTo NextRow
+        If server = "" Then GoTo NextRow   'skip blanks
         
-        tempFile = Environ("TEMP") & "\curl_output.txt"
+        tempFile = Environ$("TEMP") & "\curl_output.txt"
         
-        ' Check protocol type
-        If proto = "TCP" Then
-            result = CheckTCP(server, port, tempFile)
-        ElseIf proto = "HTTP" Or proto = "HTTPS" Then
-            result = CheckHTTP(server, path, port, fqdn, proto, tempFile)
-        Else
-            result = "Unknown protocol: " & proto
-        End If
+        Select Case proto
+            Case "TCP"
+                result = CheckTCP(server, port, tempFile)
+            Case "HTTP", "HTTPS"
+                result = CheckHTTP(server, path, port, fqdn, proto, tempFile)
+            Case Else
+                result = "Unknown protocol: " & proto
+        End Select
         
-        ' Write result to Column N
         Cells(i, "N").Value = result
         
 NextRow:
