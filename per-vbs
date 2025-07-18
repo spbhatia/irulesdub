@@ -1,0 +1,132 @@
+Option Explicit
+
+'===== USER-EDITABLE CONSTANTS ======================================
+Const FIRST_DATA_ROW As Long = 6      'Starting row of data
+Const OUT_COL As String = "N"         'Column that will hold the status
+Const CURL_BIN As String = "curl"     'Path or just "curl" if in PATH
+'====================================================================
+
+Sub ServerHealthChecks()
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Worksheets(1)   'adjust if needed
+    Dim sh As Object: Set sh = CreateObject("WScript.Shell")
+    Dim rowPtr As Long
+    
+    Application.StatusBar = "Running health checks…"
+    
+    For rowPtr = FIRST_DATA_ROW To ws.Cells(ws.Rows.Count, "G").End(xlUp).Row
+        Dim svr As String, fqdn As String, pth As String
+        Dim port As String, proto As String, statMsg As String
+        
+        svr = Trim(ws.Cells(rowPtr, "G").Value)   'server_name
+        If Len(svr) = 0 Then GoTo NextRow         'skip blank lines
+        
+        fqdn  = Trim(ws.Cells(rowPtr, "E").Value) 'fqdn
+        pth   = Trim(ws.Cells(rowPtr, "M").Value) 'path (no leading slash needed)
+        port  = Trim(ws.Cells(rowPtr, "I").Value) 'port
+        proto = UCase$(Trim(ws.Cells(rowPtr, "K").Value)) 'HTTP/HTTPS/TCP
+        
+        Select Case proto
+            Case "HTTP", "HTTPS"
+                statMsg = CheckHTTP(sh, proto, svr, port, pth, fqdn)
+            Case "TCP"
+                statMsg = CheckTCP(sh, svr, port)
+            Case Else
+                statMsg = "Unknown protocol: " & proto
+        End Select
+        
+        ws.Cells(rowPtr, OUT_COL).Value = statMsg
+NextRow:
+    Next rowPtr
+    
+    Application.StatusBar = False
+    MsgBox "Health checks complete!", vbInformation
+End Sub
+
+'--------------------------------------------------------------------
+Private Function CheckHTTP(sh As Object, proto As String, _
+                           svr As String, port As String, pth As String, fqdn As String) As String
+    Dim baseCmd As String, outText As String
+    
+    baseCmd = CURL_BIN & " -s -S -k -I " & proto & "://" & svr & ":" & port & "/" & pth _
+              & " -H ""Host: " & fqdn & """"
+    outText = ExecCurl(sh, baseCmd)
+    
+    '--- First-pass evaluation --------------------------------------
+    If InStr(outText, " 200 ") > 0 Then
+        CheckHTTP = "Health check status is Up"
+        Exit Function
+    ElseIf InStr(outText, " 401 ") > 0 Then
+        CheckHTTP = "Authentication is on preventing server health check"
+        Exit Function
+    ElseIf InStr(outText, " 404 ") > 0 Then
+        'Retry without Host header
+        outText = ExecCurl(sh, Replace(baseCmd, " -H ""Host: " & fqdn & """", ""))
+        If InStr(outText, " 200 ") > 0 Then
+            CheckHTTP = "Health check status is Up"
+        Else
+            CheckHTTP = "404 returned"
+        End If
+        Exit Function
+    ElseIf InStr(outText, " 405 ") > 0 Then
+        'HEAD not allowed ⇒ try GET
+        Dim getCmd As String: getCmd = Replace(baseCmd, "-I", "-i")
+        outText = ExecCurl(sh, getCmd)
+        If InStr(outText, " 200 ") > 0 Then
+            CheckHTTP = "HTTP HEAD forbidden, GET permitted (Up)"
+        Else
+            CheckHTTP = "Health check status is Down"
+        End If
+        Exit Function
+    End If
+    
+    '--- Error codes & HTTP→HTTP fallback ---------------------------
+    If ContainsErr(outText, "(7)") Or ContainsErr(outText, "(35)") Or ContainsErr(outText, "(60)") Then
+        If proto = "HTTPS" Then
+            Dim httpCmd As String
+            httpCmd = Replace(baseCmd, "https://", "http://")
+            outText = ExecCurl(sh, httpCmd)
+            If InStr(outText, " 200 ") > 0 Then
+                CheckHTTP = "Down on HTTPS, Up on HTTP"
+            Else
+                CheckHTTP = "Health check status is Down (HTTPS errors persist)"
+            End If
+        Else
+            CheckHTTP = "Health check status is Down (" & ExtractErr(outText) & ")"
+        End If
+    Else
+        CheckHTTP = "Health check status indeterminate"
+    End If
+End Function
+
+'--------------------------------------------------------------------
+Private Function CheckTCP(sh As Object, svr As String, port As String) As String
+    Dim tcpCmd As String, outText As String
+    tcpCmd = CURL_BIN & " -s -S -v telnet://" & svr & ":" & port & " 2>&1"
+    outText = ExecCurl(sh, tcpCmd)
+    
+    If InStr(outText, "Connected to") > 0 Then
+        CheckTCP = "TCP Connected"
+    ElseIf ContainsErr(outText, "(7)") Then
+        CheckTCP = "TCP connection refused/unreachable"
+    Else
+        CheckTCP = "TCP status indeterminate"
+    End If
+End Function
+
+'--------------------------------------------------------------------
+Private Function ExecCurl(sh As Object, cmd As String) As String
+    On Error Resume Next
+    ExecCurl = sh.Exec("%COMSPEC% /c " & cmd).StdOut.ReadAll _
+             & sh.Exec("%COMSPEC% /c " & cmd).StdErr.ReadAll
+End Function
+
+'--------------------------------------------------------------------
+Private Function ContainsErr(s As String, errCode As String) As Boolean
+    ContainsErr = (InStr(s, "curl: " & errCode) > 0)
+End Function
+
+'--------------------------------------------------------------------
+Private Function ExtractErr(s As String) As String
+    Dim i As Long: i = InStr(s, "curl:")
+    If i > 0 Then ExtractErr = Trim$(Mid$(s, i))
+End Function
