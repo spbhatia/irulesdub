@@ -38,23 +38,42 @@ NextRow:
 End Sub
 
 Function CheckTCP(server As String, port As String) As String
-    Dim cmd As String
-    Dim output As String
-    
-    cmd = "curl -v --max-time 0.1 telnet://" & server & ":" & port & " 2>&1"
+    Dim cmd As String, output As String
+    ' Force curl to connect and immediately close with invalid telnet option (best practice)
+    cmd = "curl -v telnet://" & server & ":" & port & " -t BOGUS=1 2>&1"
     output = ExecCurlFull(cmd)
     
-    If InStr(output, "Connected to " & server & " port " & port) > 0 Then
+    If InStr(1, output, "Connected to " & server & " port " & port, vbTextCompare) > 0 Then
         CheckTCP = "TCP Connected"
-    ElseIf InStr(output, "Connection refused") > 0 Then
+    ElseIf InStr(1, output, "Connection refused", vbTextCompare) > 0 Then
         CheckTCP = "TCP Connection refused"
-    ElseIf InStr(output, "timed out") > 0 Then
-        CheckTCP = "TCP Connection timeout"
-    ElseIf InStr(output, "Could not resolve host") > 0 Then
+    ElseIf InStr(1, output, "Could not resolve host", vbTextCompare) > 0 Then
         CheckTCP = "TCP Hostname cannot be resolved"
+    ElseIf InStr(1, output, "timed out", vbTextCompare) > 0 Then
+        CheckTCP = "TCP Connection timeout"
     Else
         CheckTCP = "TCP Connection failed"
     End If
+End Function
+
+Function ExecCurlFull(cmd As String) As String
+    Dim sh As Object, proc As Object
+    Dim line As String, output As String
+    
+    Set sh = CreateObject("WScript.Shell")
+    Set proc = sh.Exec("cmd /c " & cmd)
+    Do While proc.Status = 0
+        DoEvents
+    Loop
+    Do While Not proc.StdOut.AtEndOfStream
+        line = proc.StdOut.ReadLine
+        output = output & line & vbCrLf
+    Loop
+    Do While Not proc.StdErr.AtEndOfStream
+        line = proc.StdErr.ReadLine
+        output = output & line & vbCrLf
+    Loop
+    ExecCurlFull = output
 End Function
 
 Function CheckHTTP(server As String, port As String, path As String, _
