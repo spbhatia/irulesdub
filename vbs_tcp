@@ -8,15 +8,15 @@ Sub RunHealthCheck()
     Dim getMethodCmd As String
     Dim tempFile As String
     
-    ' Find last used row in Column G (Server Name)
+    ' Determine last used row in Column G (Server Name)
     lastRow = Cells(Rows.Count, "G").End(xlUp).Row
 
     For i = 6 To lastRow
-        server = Trim(Cells(i, "G").Value)
-        path = Trim(Cells(i, "M").Value)
-        port = Trim(Cells(i, "I").Value)
-        fqdn = Trim(Cells(i, "E").Value)
-        proto = LCase(Trim(Cells(i, "K").Value))
+        server = Cells(i, "G").Value
+        path = Cells(i, "M").Value
+        port = Cells(i, "I").Value
+        fqdn = Cells(i, "E").Value
+        proto = LCase(Trim(Cells(i, "K").Value)) ' Normalize protocol
         tempFile = Environ("TEMP") & "\curl_output.txt"
         
         If proto = "tcp" Then
@@ -26,14 +26,16 @@ Sub RunHealthCheck()
             Application.Wait (Now + TimeValue("0:00:03"))
             shellOutput = ReadFile(tempFile)
             
-            If InStr(LCase(shellOutput), "connected") > 0 Then
-                result = "TCP Health check is Up"
+            If InStr(shellOutput, "Connected") > 0 Or InStr(shellOutput, "Escape") > 0 Then
+                result = "TCP Port is reachable"
+            ElseIf InStr(shellOutput, "timed out") > 0 Or InStr(shellOutput, "refused") > 0 Then
+                result = "TCP Port is unreachable"
             Else
-                result = "TCP Health check is Down"
+                result = "TCP Health check: Unknown response"
             End If
-            
-        ElseIf proto = "http" Or proto = "https" Then
-            ' HTTP/HTTPS logic
+        
+        Else
+            ' HTTP/HTTPS health check
             url = proto & "://" & server & ":" & port & "/" & path
             hostHeader = "-H ""Host: " & fqdn & """"
             
@@ -45,10 +47,11 @@ Sub RunHealthCheck()
             
             If InStr(shellOutput, "200") > 0 Then
                 result = "Health check status is Up"
+            
             ElseIf InStr(shellOutput, "401") > 0 Then
                 result = "Authentication is on preventing server Health check"
+            
             ElseIf InStr(shellOutput, "404") > 0 Then
-                ' Try HEAD without Host Header
                 curlCmd = "cmd /c curl -I -k """ & url & """ > """ & tempFile & """"
                 Shell curlCmd, vbHide
                 Application.Wait (Now + TimeValue("0:00:02"))
@@ -58,8 +61,8 @@ Sub RunHealthCheck()
                 Else
                     result = "Health check status is Down (404)"
                 End If
+            
             ElseIf InStr(shellOutput, "405") > 0 Then
-                ' Try GET method
                 getMethodCmd = "cmd /c curl -i -k """ & url & """ " & hostHeader & " > """ & tempFile & """"
                 Shell getMethodCmd, vbHide
                 Application.Wait (Now + TimeValue("0:00:02"))
@@ -69,8 +72,8 @@ Sub RunHealthCheck()
                 Else
                     result = "Health check status is Down"
                 End If
+            
             ElseIf InStr(shellOutput, "(7)") > 0 Or InStr(shellOutput, "(35)") > 0 Or InStr(shellOutput, "(60)") > 0 Then
-                ' Try http instead of https
                 url = "http://" & server & ":" & port & "/" & path
                 curlCmd = "cmd /c curl -I -k """ & url & """ " & hostHeader & " > """ & tempFile & """"
                 Shell curlCmd, vbHide
@@ -81,12 +84,10 @@ Sub RunHealthCheck()
                 Else
                     result = "Health check failed on both https and http"
                 End If
+                
             Else
                 result = "Health check failed: Unknown response"
             End If
-        
-        Else
-            result = "Invalid Protocol"
         End If
         
         Cells(i, "O").Value = result
