@@ -10,18 +10,18 @@ Sub RunHealthCheck()
     Dim fqdn As String
     Dim proto As String
     Dim result As String
-    
+
     lastRow = Cells(Rows.Count, "G").End(xlUp).Row
-    
+
     For i = 6 To lastRow
         server = Trim(Cells(i, "G").Value)
         If server = "" Then GoTo NextRow
-        
+
         port = Trim(Cells(i, "I").Value)
         path = Trim(Cells(i, "M").Value)
         fqdn = Trim(Cells(i, "E").Value)
         proto = UCase(Trim(Cells(i, "K").Value))
-        
+
         If proto = "TCP" Then
             result = CheckTCP(server, port)
         ElseIf proto = "HTTP" Or proto = "HTTPS" Then
@@ -29,20 +29,22 @@ Sub RunHealthCheck()
         Else
             result = "Unknown protocol: " & proto
         End If
-        
+
         Cells(i, "N").Value = result
 NextRow:
     Next i
-    
+
     MsgBox "Health Check Completed!"
 End Sub
 
 Function CheckTCP(server As String, port As String) As String
-    Dim cmd As String, output As String
-    ' Force curl to connect and immediately close with invalid telnet option (best practice)
+    Dim cmd As String
+    Dim output As String
+
+    ' Use invalid telnet option to force quick exit after connection attempt
     cmd = "curl -v telnet://" & server & ":" & port & " -t BOGUS=1 2>&1"
     output = ExecCurlFull(cmd)
-    
+
     If InStr(1, output, "Connected to " & server & " port " & port, vbTextCompare) > 0 Then
         CheckTCP = "TCP Connected"
     ElseIf InStr(1, output, "Connection refused", vbTextCompare) > 0 Then
@@ -56,40 +58,20 @@ Function CheckTCP(server As String, port As String) As String
     End If
 End Function
 
-Function ExecCurlFull(cmd As String) As String
-    Dim sh As Object, proc As Object
-    Dim line As String, output As String
-    
-    Set sh = CreateObject("WScript.Shell")
-    Set proc = sh.Exec("cmd /c " & cmd)
-    Do While proc.Status = 0
-        DoEvents
-    Loop
-    Do While Not proc.StdOut.AtEndOfStream
-        line = proc.StdOut.ReadLine
-        output = output & line & vbCrLf
-    Loop
-    Do While Not proc.StdErr.AtEndOfStream
-        line = proc.StdErr.ReadLine
-        output = output & line & vbCrLf
-    Loop
-    ExecCurlFull = output
-End Function
-
 Function CheckHTTP(server As String, port As String, path As String, _
                    fqdn As String, proto As String) As String
     Dim url As String
     Dim cmd As String
     Dim output As String
     Dim hostHeader As String
-    
+
     url = proto & "://" & server & ":" & port & "/" & path
     hostHeader = " -H ""Host: " & fqdn & """"
-    
+
     ' HEAD with Host header
     cmd = "curl -N -I -k --connect-timeout 10 --max-time 10 """ & url & """ " & hostHeader & " 2>&1"
     output = ExecCurlFull(cmd)
-    
+
     If InStr(output, "200") > 0 Then
         CheckHTTP = "Health check status is Up"
     ElseIf InStr(output, "401") > 0 Then
@@ -137,8 +119,7 @@ End Function
 Function ExecCurlFull(cmd As String) As String
     Dim sh As Object, proc As Object
     Dim line As String, output As String
-    
-    On Error Resume Next
+
     Set sh = CreateObject("WScript.Shell")
     Set proc = sh.Exec("cmd /c " & cmd)
     Do While proc.Status = 0
