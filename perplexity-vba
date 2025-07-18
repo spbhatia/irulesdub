@@ -1,0 +1,160 @@
+Option Explicit
+
+'===== USER-EDITABLE CONSTANTS ======================================
+Const OUT_COL As String = "N"         ' Output status column
+Const SERVER_COL As String = "G"      ' Server name column (e.g., G6)
+Const PORT_COL As String = "I"        ' Port column (e.g., I6)
+Const PATH_COL As String = "M"        ' Path column (e.g., M6)
+Const FQDN_COL As String = "E"        ' FQDN column (e.g., E6)
+Const PROTO_COL As String = "K"       ' Protocol column (e.g., K6)
+Const FIRST_DATA_ROW As Long = 6      ' First row of data (e.g., 6)
+'====================================================================
+
+Sub RunHealthCheck()
+    Dim ws As Worksheet: Set ws = ActiveSheet
+    Dim lastRow As Long, i As Long
+
+    Dim server As String
+    Dim port As String
+    Dim path As String
+    Dim fqdn As String
+    Dim proto As String
+    Dim result As String
+
+    lastRow = ws.Cells(ws.Rows.Count, SERVER_COL).End(xlUp).Row
+
+    For i = FIRST_DATA_ROW To lastRow
+        server = Trim(ws.Cells(i, SERVER_COL).Value)
+        If server = "" Then GoTo NextRow
+
+        port = Trim(ws.Cells(i, PORT_COL).Value)
+        path = Trim(ws.Cells(i, PATH_COL).Value)
+        fqdn = Trim(ws.Cells(i, FQDN_COL).Value)
+        proto = UCase(Trim(ws.Cells(i, PROTO_COL).Value))
+
+        If proto = "TCP" Then
+            result = CheckTCP_PS(server, port)
+        ElseIf proto = "HTTP" Or proto = "HTTPS" Then
+            result = CheckHTTP_Curl(server, port, path, fqdn, proto)
+        Else
+            result = "Unknown protocol: " & proto
+        End If
+
+        ws.Cells(i, OUT_COL).Value = result
+NextRow:
+    Next i
+
+    MsgBox "Health Check Completed!"
+End Sub
+
+'====================================================================
+' TCP HEALTH CHECK (POWERSHELL)
+' Uses PowerShell's Test-NetConnection (aka tnc) for robust port checks
+'====================================================================
+Function CheckTCP_PS(server As String, port As String) As String
+    Dim cmd As String, output As String
+    Dim sh As Object, proc As Object
+    Dim ret As String
+
+    ' PowerShell return "True" if port is open, "False" if not
+    cmd = "powershell -command ""$r=Test-NetConnection -ComputerName '" & server & "' -Port " & port & "; Write-Output $r.TcpTestSucceeded"""
+
+    Set sh = CreateObject("WScript.Shell")
+    Set proc = sh.Exec(cmd)
+    Do While proc.Status = 0  ' Wait for PowerShell to finish
+        DoEvents
+    Loop
+    Do While Not proc.StdOut.AtEndOfStream
+        ret = proc.StdOut.ReadLine
+        If ret = "True" Then
+            CheckTCP_PS = "TCP Connected"
+        ElseIf ret = "False" Then
+            CheckTCP_PS = "TCP Connection failed"
+        End If
+    Loop
+End Function
+
+'====================================================================
+' HTTP/HTTPS HEALTH CHECK (CURL)
+' Reuses your existing HTTP/HTTPS logic, but with robust output capture
+'====================================================================
+Function CheckHTTP_Curl(server As String, port As String, _
+                        path As String, fqdn As String, proto As String) As String
+    Dim url As String
+    Dim cmd As String
+    Dim output As String
+    Dim hostHeader As String
+
+    url = proto & "://" & server & ":" & port & "/" & path
+    hostHeader = " -H ""Host: " & fqdn & """"
+
+    ' HEAD with Host header
+    cmd = "curl -N -I -k --connect-timeout 10 --max-time 10 """ & url & """ " & hostHeader & " 2>&1"
+    output = ExecCurlFull(cmd)
+
+    If InStr(output, "200") > 0 Then
+        CheckHTTP_Curl = "Health check status is Up"
+    ElseIf InStr(output, "401") > 0 Then
+        CheckHTTP_Curl = "Authentication is on preventing server Health check"
+    ElseIf InStr(output, "404") > 0 Then
+        ' Retry HEAD without Host header
+        cmd = "curl -N -I -k --connect-timeout 10 --max-time 10 """ & url & """ 2>&1"
+        output = ExecCurlFull(cmd)
+        If InStr(output, "200") > 0 Then
+            CheckHTTP_Curl = "Health check status is Up"
+        Else
+            CheckHTTP_Curl = "Health check status is Down (404)"
+        End If
+    ElseIf InStr(output, "405") > 0 Then
+        ' Try GET with Host header
+        cmd = "curl -N -i -k --connect-timeout 10 --max-time 10 """ & url & """ " & hostHeader & " 2>&1"
+        output = ExecCurlFull(cmd)
+        If InStr(output, "200") > 0 Then
+            CheckHTTP_Curl = "Http HEAD method is not permitted, GET method is permitted"
+        Else
+            CheckHTTP_Curl = "Health check status is Down"
+        End If
+    ElseIf InStr(output, "(7)") > 0 Or InStr(output, "(35)") > 0 Or InStr(output, "(60)") > 0 Then
+        ' Try HTTP instead of HTTPS
+        If proto = "HTTPS" Then
+            url = "http://" & server & ":" & port & "/" & path
+            cmd = "curl -N -I -k --connect-timeout 10 --max-time 10 """ & url & """ " & hostHeader & " 2>&1"
+            output = ExecCurlFull(cmd)
+            If InStr(output, "200") > 0 Then
+                CheckHTTP_Curl = "Health check status is down on https, Up on http"
+            Else
+                CheckHTTP_Curl = "Health check status is Down (HTTPS errors persist)"
+            End If
+        Else
+            CheckHTTP_Curl = "Health check status is Down"
+        End If
+    ElseIf InStr(output, "Hostname was NOT found") > 0 Or _
+           InStr(output, "Could not resolve host") > 0 Then
+        CheckHTTP_Curl = "FQDN cannot be resolved"
+    Else
+        CheckHTTP_Curl = "Health check status indeterminate"
+    End If
+End Function
+
+'====================================================================
+' UTILITY: Run curl command and capture all output
+'====================================================================
+Function ExecCurlFull(cmd As String) As String
+    Dim sh As Object, proc As Object
+    Dim line As String, output As String
+
+    Set sh = CreateObject("WScript.Shell")
+    Set proc = sh.Exec("cmd /c " & cmd)
+    Do While proc.Status = 0
+        DoEvents
+    Loop
+    Do While Not proc.StdOut.AtEndOfStream
+        line = proc.StdOut.ReadLine
+        output = output & line & vbCrLf
+    Loop
+    Do While Not proc.StdErr.AtEndOfStream
+        line = proc.StdErr.ReadLine
+        output = output & line & vbCrLf
+    Loop
+    ExecCurlFull = output
+End Function
