@@ -51,13 +51,17 @@ End Sub
 ' TCP HEALTH CHECK (POWERSHELL)
 '====================================================================
 Function CheckTCP_PS(server As String, port As String) As String
-    Dim cmd As String, ret As String
+    Dim cmd As String, output As String
     Dim sh As Object, proc As Object
+    Dim ret As String
 
     cmd = "powershell -command ""$r=Test-NetConnection -ComputerName '" & server & "' -Port " & port & "; Write-Output $r.TcpTestSucceeded"""
+
     Set sh = CreateObject("WScript.Shell")
     Set proc = sh.Exec(cmd)
-    Do While proc.Status = 0: DoEvents: Loop
+    Do While proc.Status = 0  ' Wait for PowerShell to finish
+        DoEvents
+    Loop
     Do While Not proc.StdOut.AtEndOfStream
         ret = proc.StdOut.ReadLine
         If ret = "True" Then
@@ -79,17 +83,17 @@ Function CheckHTTP_Curl_With_Retry(server As String, port As String, _
 
     Dim url As String, cmd As String, output As String
     Dim hostHeader As String
-    Dim fallbackURL As String, fallbackOutput As String
-    Dim retryCount As Integer
+    Dim i As Integer
+    Dim httpFallbackURL As String, httpFallbackOutput As String
+    Dim getOutput As String
 
     url = proto & "://" & server & ":" & port & "/" & path
     hostHeader = " -H ""Host: " & fqdn & """"
 
-    ' Try HEAD up to 3 times
-    For retryCount = 1 To 3
+    ' 1. Try HEAD up to 3 times
+    For i = 1 To 3
         cmd = "curl -N -I -k --connect-timeout 10 --max-time 10 """ & url & """ " & hostHeader & " 2>&1"
         output = ExecCurlFull(cmd)
-
         If InStr(output, "200") > 0 Then
             CheckHTTP_Curl_With_Retry = "Health check status is Up"
             Exit Function
@@ -97,30 +101,35 @@ Function CheckHTTP_Curl_With_Retry(server As String, port As String, _
             CheckHTTP_Curl_With_Retry = "Authentication is preventing server access"
             Exit Function
         End If
-
         Application.Wait Now + TimeValue("0:00:01")
-    Next retryCount
+    Next i
 
-    ' Fallback 1: Try HTTP (if protocol was HTTPS)
+    ' 2. Fallback: Try HTTP if input was HTTPS
     If proto = "HTTPS" Then
-        fallbackURL = "http://" & server & ":" & port & "/" & path
-        cmd = "curl -N -I -k --connect-timeout 10 --max-time 10 """ & fallbackURL & """ " & hostHeader & " 2>&1"
-        fallbackOutput = ExecCurlFull(cmd)
-        If InStr(fallbackOutput, "200") > 0 Then
-            CheckHTTP_Curl_With_Retry = "Health Check status is Up via fallback to HTTP"
+        httpFallbackURL = "http://" & server & ":" & port & "/" & path
+        cmd = "curl -N -I -k --connect-timeout 10 --max-time 10 """ & httpFallbackURL & """ " & hostHeader & " 2>&1"
+        httpFallbackOutput = ExecCurlFull(cmd)
+        If InStr(httpFallbackOutput, "200") > 0 Then
+            CheckHTTP_Curl_With_Retry = "Health check status is Up via HTTP fallback"
+            Exit Function
+        ElseIf InStr(httpFallbackOutput, "401") > 0 Then
+            CheckHTTP_Curl_With_Retry = "Authentication is preventing server access via HTTP fallback"
             Exit Function
         End If
     End If
 
-    ' Fallback 2: Try GET method (original protocol)
+    ' 3. Fallback: Try GET with original protocol
     cmd = "curl -N -i -k --connect-timeout 10 --max-time 10 """ & url & """ " & hostHeader & " 2>&1"
-    fallbackOutput = ExecCurlFull(cmd)
-    If InStr(fallbackOutput, "200") > 0 Then
-        CheckHTTP_Curl_With_Retry = "Health Check status is Up via GET fallback"
+    getOutput = ExecCurlFull(cmd)
+    If InStr(getOutput, "200") > 0 Then
+        CheckHTTP_Curl_With_Retry = "Health check status is Up via GET fallback"
+        Exit Function
+    ElseIf InStr(getOutput, "401") > 0 Then
+        CheckHTTP_Curl_With_Retry = "Authentication is preventing server access via GET fallback"
         Exit Function
     End If
 
-    CheckHTTP_Curl_With_Retry = "Health check status is Down"
+    CheckHTTP_Curl_With_Retry = "Health check status is Down. HEAD/GET/HTTP fallback all failed."
 End Function
 
 '====================================================================
@@ -132,7 +141,9 @@ Function ExecCurlFull(cmd As String) As String
 
     Set sh = CreateObject("WScript.Shell")
     Set proc = sh.Exec("cmd /c " & cmd)
-    Do While proc.Status = 0: DoEvents: Loop
+    Do While proc.Status = 0
+        DoEvents
+    Loop
     Do While Not proc.StdOut.AtEndOfStream
         line = proc.StdOut.ReadLine
         output = output & line & vbCrLf
