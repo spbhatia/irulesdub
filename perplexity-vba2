@@ -1,0 +1,145 @@
+Option Explicit
+
+'===== USER-EDITABLE CONSTANTS ======================================
+Const OUT_COL As String = "N"         ' Output status column
+Const SERVER_COL As String = "G"      ' Server name column (e.g., G6)
+Const PORT_COL As String = "I"        ' Port column (e.g., I6)
+Const PATH_COL As String = "M"        ' Path column (e.g., M6)
+Const FQDN_COL As String = "E"        ' FQDN column (e.g., E6)
+Const PROTO_COL As String = "K"       ' Protocol column (e.g., K6)
+Const FIRST_DATA_ROW As Long = 6      ' First row of data (e.g., 6)
+'====================================================================
+
+Sub RunHealthCheck()
+    Dim ws As Worksheet: Set ws = ActiveSheet
+    Dim lastRow As Long, i As Long
+
+    Dim server As String
+    Dim port As String
+    Dim path As String
+    Dim fqdn As String
+    Dim proto As String
+    Dim result As String
+
+    lastRow = ws.Cells(ws.Rows.Count, SERVER_COL).End(xlUp).Row
+
+    For i = FIRST_DATA_ROW To lastRow
+        server = Trim(ws.Cells(i, SERVER_COL).Value)
+        If server = "" Then GoTo NextRow
+
+        port = Trim(ws.Cells(i, PORT_COL).Value)
+        path = Trim(ws.Cells(i, PATH_COL).Value)
+        fqdn = Trim(ws.Cells(i, FQDN_COL).Value)
+        proto = UCase(Trim(ws.Cells(i, PROTO_COL).Value))
+
+        If proto = "TCP" Then
+            result = CheckTCP_PS(server, port)
+        ElseIf proto = "HTTP" Or proto = "HTTPS" Then
+            result = CheckHTTP_Curl_With_Retry(server, port, path, fqdn, proto)
+        Else
+            result = "Unknown protocol: " & proto
+        End If
+
+        ws.Cells(i, OUT_COL).Value = result
+NextRow:
+    Next i
+
+    MsgBox "Health Check Completed!"
+End Sub
+
+'====================================================================
+' TCP HEALTH CHECK (POWERSHELL)
+'====================================================================
+Function CheckTCP_PS(server As String, port As String) As String
+    Dim cmd As String, ret As String
+    Dim sh As Object, proc As Object
+
+    cmd = "powershell -command ""$r=Test-NetConnection -ComputerName '" & server & "' -Port " & port & "; Write-Output $r.TcpTestSucceeded"""
+    Set sh = CreateObject("WScript.Shell")
+    Set proc = sh.Exec(cmd)
+    Do While proc.Status = 0: DoEvents: Loop
+    Do While Not proc.StdOut.AtEndOfStream
+        ret = proc.StdOut.ReadLine
+        If ret = "True" Then
+            CheckTCP_PS = "TCP Connected"
+            Exit Function
+        ElseIf ret = "False" Then
+            CheckTCP_PS = "TCP Connection failed"
+            Exit Function
+        End If
+    Loop
+    CheckTCP_PS = "TCP Health Check Indeterminate"
+End Function
+
+'====================================================================
+' HTTP/HTTPS HEALTH CHECK WITH 3 RETRIES, HTTP/GET FALLBACKS
+'====================================================================
+Function CheckHTTP_Curl_With_Retry(server As String, port As String, _
+                        path As String, fqdn As String, proto As String) As String
+
+    Dim url As String, cmd As String, output As String
+    Dim hostHeader As String
+    Dim fallbackURL As String, fallbackOutput As String
+    Dim retryCount As Integer
+
+    url = proto & "://" & server & ":" & port & "/" & path
+    hostHeader = " -H ""Host: " & fqdn & """"
+
+    ' Try HEAD up to 3 times
+    For retryCount = 1 To 3
+        cmd = "curl -N -I -k --connect-timeout 10 --max-time 10 """ & url & """ " & hostHeader & " 2>&1"
+        output = ExecCurlFull(cmd)
+
+        If InStr(output, "200") > 0 Then
+            CheckHTTP_Curl_With_Retry = "Health check status is Up"
+            Exit Function
+        ElseIf InStr(output, "401") > 0 Then
+            CheckHTTP_Curl_With_Retry = "Authentication is preventing server access"
+            Exit Function
+        End If
+
+        Application.Wait Now + TimeValue("0:00:01")
+    Next retryCount
+
+    ' Fallback 1: Try HTTP (if protocol was HTTPS)
+    If proto = "HTTPS" Then
+        fallbackURL = "http://" & server & ":" & port & "/" & path
+        cmd = "curl -N -I -k --connect-timeout 10 --max-time 10 """ & fallbackURL & """ " & hostHeader & " 2>&1"
+        fallbackOutput = ExecCurlFull(cmd)
+        If InStr(fallbackOutput, "200") > 0 Then
+            CheckHTTP_Curl_With_Retry = "Health Check status is Up via fallback to HTTP"
+            Exit Function
+        End If
+    End If
+
+    ' Fallback 2: Try GET method (original protocol)
+    cmd = "curl -N -i -k --connect-timeout 10 --max-time 10 """ & url & """ " & hostHeader & " 2>&1"
+    fallbackOutput = ExecCurlFull(cmd)
+    If InStr(fallbackOutput, "200") > 0 Then
+        CheckHTTP_Curl_With_Retry = "Health Check status is Up via GET fallback"
+        Exit Function
+    End If
+
+    CheckHTTP_Curl_With_Retry = "Health check status is Down"
+End Function
+
+'====================================================================
+' UTILITY: Run curl command and capture all output
+'====================================================================
+Function ExecCurlFull(cmd As String) As String
+    Dim sh As Object, proc As Object
+    Dim line As String, output As String
+
+    Set sh = CreateObject("WScript.Shell")
+    Set proc = sh.Exec("cmd /c " & cmd)
+    Do While proc.Status = 0: DoEvents: Loop
+    Do While Not proc.StdOut.AtEndOfStream
+        line = proc.StdOut.ReadLine
+        output = output & line & vbCrLf
+    Loop
+    Do While Not proc.StdErr.AtEndOfStream
+        line = proc.StdErr.ReadLine
+        output = output & line & vbCrLf
+    Loop
+    ExecCurlFull = output
+End Function
